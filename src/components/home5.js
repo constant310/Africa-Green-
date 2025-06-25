@@ -1,77 +1,57 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-// List of subsidiary companies
-const subsidiaries = [
-  'MAXX AND HEIGHTS GLOBAL VENTURES',
-  'KLASS PROPERTIES',
-  'COMMI PROPERTIES',
-  'HOLLMARK OF NATURAL RESOURCES',
-  'SOEPIC',
+import excellenceImg from '../assets/images/excellence.png';
+import valueImg from '../assets/images/value.png';
+import continuousImg from '../assets/images/continuous.png';
+import accountabilityImg from '../assets/images/accountability.png';
+import integrityImg from '../assets/images/integrity.png';
+import innovationImg from '../assets/images/innovation.png';
+import disciplineImg from '../assets/images/discipline.png';
+
+const coreValues = [
+  { title: 'Excellence', icon: excellenceImg },
+  { title: 'Value', icon: valueImg },
+  { title: 'Continuous Drive for Growth', icon: continuousImg },
+  { title: 'Accountability', icon: accountabilityImg },
+  { title: 'Integrity', icon: integrityImg },
+  { title: 'Innovation and Improvement', icon: innovationImg },
+  { title: 'Discipline', icon: disciplineImg },
 ];
 
-const Home5 = () => {
-  // State to track which subsidiary descriptions are open
-  const [openItems, setOpenItems] = useState(Array(subsidiaries.length).fill(false));
+export default function Homes5() {
+  const [showCards, setShowCards] = useState(false);
 
-  const toggleItem = (index) => {
-    setOpenItems((prev) => {
-      const newOpen = [...prev];
-      newOpen[index] = !newOpen[index];
-      return newOpen;
-    });
-  };
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowCards(true);
+    }, 2000); // Slide in after 2 seconds
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
-    <section className="max-w-4xl mx-auto p-6">
-      {/* Main Title */}
-      <h2 className="text-4xl font-bold mb-4 text-center">AFFILIATES</h2>
-      {/* Description */}
-      <p className="text-gray-700 mb-6 text-center">
-        Africa Green Gate Ltd has established a structured marketing system through the affiliation with renowned marketing companies now known as affiliates or subsidiaries of the Company.
-      </p>
+    <section id="core-values" className="py-16 bg-white px-4">
+      <div className="max-w-6xl mx-auto text-center mb-12">
+        <h2 className="text-3xl sm:text-4xl font-bold text-green-900">Our Core Values</h2>
+      </div>
 
-      {/* Card Container */}
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        {/* Subtitle Bar */}
-        <div className="bg-gray-200 px-6 py-3">
-          <h3 className="text-xl font-semibold uppercase">SUBSIDIARIES</h3>
-        </div>
-
-        {/* List of Subsidiaries */}
-        <ul className="divide-y divide-gray-300">
-          {subsidiaries.map((company, index) => (
-            <li key={company} className="px-6 py-4">
-              <button
-                className="w-full flex justify-between items-center font-medium uppercase text-left"
-                onClick={() => toggleItem(index)}
-              >
-                <span>{company}</span>
-                <svg
-                  className={`w-5 h-5 transform transition-transform ${openItems[index] ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </button>
-
-              {openItems[index] && (
-                <p className="mt-3 text-gray-700">
-                  Africa Green Gate Ltd is a private investment company committed to the early identification and capitalization of investment opportunities within core industries and sectors for social and economic advancement.
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
+      <div className="max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-3 gap-4">
+        {coreValues.map((cv, idx) => (
+          <div
+            key={idx}
+            className={`w-36 h-36 sm:w-40 sm:h-40 bg-gray-100 rounded-lg p-4 flex flex-col justify-center items-center shadow-md transition-all duration-1000 ease-out transform ${
+              showCards ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            }`}
+          >
+            <img
+              src={cv.icon}
+              alt={cv.title}
+              className="w-10 h-10 object-contain mb-2"
+              loading="lazy"
+            />
+            <h3 className="text-sm font-semibold text-green-800 text-center">{cv.title}</h3>
+          </div>
+        ))}
       </div>
     </section>
   );
-};
-
-export default Home5;
+}
