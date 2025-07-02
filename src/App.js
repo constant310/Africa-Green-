@@ -12,7 +12,8 @@ import Farming from "./components/farming";
 import Agricultural from "./components/agric";
 import Residential from "./components/res";
 import Industrial from "./components/industrial";
-
+import AuthFlow from "./components/webapp";
+import Login from "./components/login";
 function App() {
   return (
     <div>
@@ -27,6 +28,8 @@ function App() {
         <Route path="real-estate/estates/agricultural" element={<Agricultural />} />
         <Route path="real-estate/estates/residential" element={<Residential />} />
         <Route path="real-estate/estates/industrial" element={<Industrial />} />
+        <Route path="/app" element={<AuthFlow />} />
+        <Route path="/login" element={<Login />} />
       </Routes>
       </Router>
     </div>
