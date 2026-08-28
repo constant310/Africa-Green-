@@ -1,0 +1,14 @@
+import {NextRequest,NextResponse} from 'next/server';
+import crypto from 'node:crypto';
+const supabaseUrl=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://ynlmhpwytpegleafdpwb.supabase.co';
+async function serviceRpc(name:string,args:Record<string,unknown>){const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!key)throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');const r=await fetch(`${supabaseUrl}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify(args)});const x=await r.json().catch(()=>null);if(!r.ok)throw new Error(x?.message||`RPC ${name} failed`);return x}
+async function email(to:string|undefined,subject:string,html:string){const key=process.env.RESEND_API_KEY;if(!key||!to)return;await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.RESEND_FROM_EMAIL||'Acres of Diamond <onboarding@resend.dev>',to:[to],subject,html})})}
+export async function POST(req:NextRequest){
+ const secret=process.env.PAYSTACK_SECRET_KEY;if(!secret)return NextResponse.json({error:'Payment webhook is not configured.'},{status:503});
+ const raw=await req.text();const expected=crypto.createHmac('sha512',secret).update(raw).digest('hex');const signature=req.headers.get('x-paystack-signature')||'';if(!signature||signature.length!==expected.length||!crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(expected)))return NextResponse.json({error:'Invalid signature'},{status:401});
+ try{const event=JSON.parse(raw);if(event.event!=='charge.success')return NextResponse.json({ok:true});const d=event.data||{};const reference=String(d.reference||'');const amount=Number(d.amount||0);const hash=crypto.createHash('sha256').update(raw).digest('hex');const purpose=String(d.metadata?.purpose||'').toUpperCase();
+  if(purpose==='REGISTRATION'){const result=await serviceRpc('verify_registration_payment',{p_reference:reference,p_amount_kobo:amount,p_provider_payload_hash:hash});await email(result?.email,'Registration payment received',`<h2>Payment received</h2><p>Your Acres of Diamond registration and minimum share payment has been verified successfully.</p><p>Reference: <strong>${reference}</strong></p>`);}
+  else if(purpose==='WALLET'){const result=await serviceRpc('credit_member_wallet_v4',{p_user:d.metadata?.user_id,p_reference:reference,p_amount_kobo:amount,p_provider_payload_hash:hash});await email(result?.email,'Wallet funded successfully',`<h2>Wallet funded</h2><p>Your Acres of Diamond wallet has been credited with ₦${(amount/100).toLocaleString('en-NG')}.</p><p>Reference: <strong>${reference}</strong></p>`);}
+  return NextResponse.json({ok:true});
+ }catch(e){console.error('paystack_webhook_error',e);return NextResponse.json({error:'Webhook processing failed'},{status:500})}
+}
