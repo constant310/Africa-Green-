@@ -1,0 +1,11 @@
+'use client';
+import { FormEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../lib/supabase';
+
+export default function LoginPage(){
+ const router=useRouter(); const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [busy,setBusy]=useState(false); const [msg,setMsg]=useState('');
+ async function submit(e:FormEvent){e.preventDefault();setBusy(true);setMsg('');const {error}=await supabase.auth.signInWithPassword({email,password});setBusy(false);if(error)return setMsg(error.message);router.push('/portal');}
+ async function google(){setBusy(true);setMsg('');const {error}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://cooperative-production-v2.vercel.app/portal'}});if(error){setBusy(false);setMsg(error.message)}}
+ return <main className="authPage"><section className="authVisual"><div className="logoBox">AD</div><span className="eyebrow">ACRES OF DIAMOND</span><h1>Build assets. Grow together.</h1><p>One secure place for membership, savings, shares, loans and cooperative administration.</p><div className="authHighlights"><span>Secure member wallet</span><span>Transparent approvals</span><span>Mobile-ready access</span></div></section><section className="authPanel"><form className="authCard" onSubmit={submit}><div className="mobileBrand"><div className="logoBox">AD</div><b>Acres of Diamond</b></div><h2>Welcome back</h2><p className="muted">Sign in to continue to your cooperative portal.</p><button type="button" className="btn google" onClick={google} disabled={busy}>Continue with Google</button><div className="divider"><span>or sign in with email</span></div><label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="you@example.com"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8} placeholder="Enter your password"/></label>{msg&&<div className="alert error">{msg}</div>}<button className="btn primary wide" disabled={busy}>{busy?'Signing in…':'Sign in'}</button><p className="small muted center">New member? <a href="/register">Create an account</a></p></form></section></main>
+}
