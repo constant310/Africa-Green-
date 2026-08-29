@@ -8,7 +8,7 @@ export async function POST(req:NextRequest){
  try{
   const token=req.headers.get('authorization')?.replace(/^Bearer\s+/i,'');
   if(!token)return NextResponse.json({error:'Unauthorized'},{status:401});
-  const secret=process.env.V4_PAYSTACK_SECRET_KEY;
+  const secret=process.env.V4_PAYSTACK_SECRET_KEY||process.env.PAYSTACK_SECRET_KEY;
   if(!secret)return NextResponse.json({error:'Paystack is not configured on this deployment.'},{status:503});
   const body=await req.json();
   const naira=Number(body.amount_naira);
