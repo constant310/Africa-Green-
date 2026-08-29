@@ -22,7 +22,7 @@ export async function POST(req:NextRequest){
   const token=req.headers.get('authorization')?.replace(/^Bearer\s+/i,'');
   if(!token)return NextResponse.json({error:'Unauthorized'},{status:401});
 
-  const secret=process.env.V4_PAYSTACK_SECRET_KEY;
+  const secret=process.env.V4_PAYSTACK_SECRET_KEY||process.env.PAYSTACK_SECRET_KEY;
   if(!secret)return NextResponse.json({error:'Paystack is not configured.'},{status:503});
 
   const u=await fetch(`${supabaseUrl}/auth/v1/user`,{headers:{apikey:publishable,Authorization:`Bearer ${token}`}});
