@@ -63,7 +63,7 @@ export default function Onboarding(){
   setBusy(true);setMsg('');
   const {data:{session}}=await supabase.auth.getSession();
   if(!session){router.replace('/login');return;}
-  await supabase.rpc('update_application_step_v4',{p_step:'registration',p_payload:{fee:'10000',minimumShare:'10000',provider:'PAYSTACK'}});
+  await supabase.rpc('update_application_step_v4',{p_step:'registration',p_payload:{fee:'10000',provider:'PAYSTACK'}});
   const res=await fetch('/api/paystack/registration',{
    method:'POST',
    headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},
@@ -150,9 +150,9 @@ export default function Onboarding(){
     {['personal','contact','occupation','kyc','passport','nextOfKin'].includes(step)&&<form className="formGrid" onSubmit={submitForm}><Fields/><div className="actions"><button type="button" className="btn" onClick={()=>currentIndex>0&&setStep(steps[currentIndex-1][0])}>Back</button><button className="btn primary" disabled={busy}>Save & continue</button></div></form>}
 
     {step==='registration'&&<div className="stack">
-     <div className="grid2"><div className="card" style={{boxShadow:'none'}}><small className="muted">Registration fee</small><div className="balance" style={{fontSize:32}}>₦10,000</div></div><div className="card" style={{boxShadow:'none'}}><small className="muted">Minimum share capital</small><div className="balance" style={{fontSize:32}}>₦10,000</div></div></div>
-     <p className="muted">Total due during onboarding: <b>₦20,000</b>. Payment is verified server-side before your application can be submitted.</p>
-     <div className="actions"><button className="btn primary" onClick={startPayment} disabled={busy}>Pay ₦20,000 with Paystack</button><button className="btn" onClick={async()=>{await save({fee:'10000',minimumShare:'10000',provider:'PAYSTACK'},false);setStep('bylaws')}}>I already paid / continue</button></div>
+     <div className="card" style={{boxShadow:'none'}}><small className="muted">Required registration fee</small><div className="balance" style={{fontSize:32}}>₦10,000</div></div>
+     <p className="muted">Only the ₦10,000 registration fee is required during onboarding. Share capital and thrift contributions can be funded separately after membership activation. Payment is verified server-side before your application can be submitted.</p>
+     <div className="actions"><button className="btn primary" onClick={startPayment} disabled={busy}>Pay ₦10,000 with Paystack</button><button className="btn" onClick={async()=>{await save({fee:'10000',provider:'PAYSTACK'},false);setStep('bylaws')}}>I already paid / continue</button></div>
     </div>}
 
     {step==='bylaws'&&<div className="stack">
@@ -162,7 +162,7 @@ export default function Onboarding(){
     </div>}
 
     {step==='review'&&<div className="stack">
-     <div className="reviewBox">Account: {snap?.profile?.email||'—'}\nStatus: {snap?.profile?.membership_status||'—'}\nRegistration: ₦10,000\nMinimum shares: ₦10,000\nProperty Thrift after activation: ₦10,000 weekly × 50 weeks\n\nFinal submission requires a verified registration/share payment. After submission, two independent authorized reviewers are required before activation.</div>
+     <div className="reviewBox">Account: {snap?.profile?.email||'—'}\nStatus: {snap?.profile?.membership_status||'—'}\nRequired registration fee: ₦10,000\nShare capital: optional after activation\nProperty Thrift: optional after activation · ₦10,000 weekly × 50 weeks\n\nFinal submission requires only a verified ₦10,000 registration payment. After submission, two independent authorized reviewers are required before activation.</div>
      <button className="btn primary" onClick={finalSubmit} disabled={busy}>Submit membership application</button>
     </div>}
    </section>
