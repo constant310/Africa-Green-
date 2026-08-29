@@ -25,7 +25,7 @@ export default function ActivityPage(){
  useEffect(()=>{void load()},[]);
  return <main className="onboarding">
   {busy&&<div className="loadingBar"/>}
-  <div className="onboardTop"><div className="container" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16}}><Link href="/" className="brand"><span className="brandMark">AD</span><span>Acres of Diamond<small>Account activity</small></span></Link><Link className="btn" href="/portal">Back to member portal</Link></div></div>
+  <div className="onboardTop"><div className="container" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16}}><Link href="/" className="brand"><span className="brandMark">AD</span><span>Acres of Diamond<small>Account activity</small></span></Link><div className="actions"><Link className="btn" href="/notifications">Notifications</Link><Link className="btn" href="/portal">Back to member portal</Link></div></div></div>
   <div className="container" style={{paddingTop:28,paddingBottom:48}}>
    <section className="welcome" style={{marginBottom:20}}><div><p className="eyebrow" style={{color:'#a8e4c5'}}>Account record</p><h2>Your activity log</h2><p>See actions carried out on your cooperative account by you, an administrator, a Super Admin or the system.</p></div><button className="btn" onClick={()=>void load()}>Refresh</button></section>
    {msg&&<div className="alert" style={{marginBottom:16}}>{msg}</div>}
