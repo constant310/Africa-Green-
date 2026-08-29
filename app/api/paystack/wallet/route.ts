@@ -19,7 +19,7 @@ export async function POST(req:NextRequest){
   const reference=`AOD-WALLET-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
   const amount=Math.round(naira*100);
   const appUrl=(process.env.NEXT_PUBLIC_APP_URL||req.nextUrl.origin).replace(/\/$/,'');
-  const callbackUrl=`${appUrl}/api/paystack/wallet-return?reference=${encodeURIComponent(reference)}`;
+  const callbackUrl=`${appUrl}/portal?wallet_sync=1&reference=${encodeURIComponent(reference)}`;
   const p=await fetch('https://api.paystack.co/transaction/initialize',{
    method:'POST',
    headers:{Authorization:`Bearer ${secret}`,'Content-Type':'application/json'},
