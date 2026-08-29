@@ -1,11 +1,11 @@
 import {NextRequest,NextResponse} from 'next/server';
 import crypto from 'node:crypto';
-const supabaseUrl=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://ynlmhpwytpegleafdpwb.supabase.co';
-const publishable=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'sb_publishable_B6dHJGvHPWrJfO-jsEHdog_cSaaL0VP';
+const supabaseUrl=process.env.NEXT_PUBLIC_V4_SUPABASE_URL||'https://ynlmhpwytpegleafdpwb.supabase.co';
+const publishable=process.env.NEXT_PUBLIC_V4_SUPABASE_PUBLISHABLE_KEY||'sb_publishable_B6dHJGvHPWrJfO-jsEHdog_cSaaL0VP';
 export async function POST(req:NextRequest){
  try{
   const token=req.headers.get('authorization')?.replace(/^Bearer\s+/i,'');if(!token)return NextResponse.json({error:'Unauthorized'},{status:401});
-  const secret=process.env.PAYSTACK_SECRET_KEY;if(!secret)return NextResponse.json({error:'Paystack production key is not configured on this deployment.'},{status:503});
+  const secret=process.env.V4_PAYSTACK_SECRET_KEY;if(!secret)return NextResponse.json({error:'V4 Paystack key is not configured on this deployment.'},{status:503});
   const body=await req.json();const naira=Number(body.amount_naira);if(!Number.isFinite(naira)||naira<100)return NextResponse.json({error:'Enter a wallet funding amount of at least ₦100.'},{status:400});
   const u=await fetch(`${supabaseUrl}/auth/v1/user`,{headers:{apikey:publishable,Authorization:`Bearer ${token}`}});const user=await u.json();if(!u.ok||!user.id)return NextResponse.json({error:'Your session has expired. Please log in again.'},{status:401});
   const reference=`AOD-WALLET-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;const amount=Math.round(naira*100);
