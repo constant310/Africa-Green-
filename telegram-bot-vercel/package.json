@@ -1,0 +1,10 @@
+{
+  "name": "jamb123bot-vercel",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "dependencies": {
+    "@vercel/functions": "^2.2.0"
+  }
+}
