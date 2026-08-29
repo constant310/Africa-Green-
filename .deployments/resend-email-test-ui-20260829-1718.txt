@@ -1,0 +1,4 @@
+Force production deployment so the admin Resend email test page and Admin Tools link are included.
+Latest required commits:
+- d0a57fba3146ade126f58867fa44c46e82d195be
+- 7d9331fe0fda27e9d8d804d74a92b3f4b69c761a
