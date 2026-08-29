@@ -13,8 +13,14 @@ export default function Reports(){
  const[busy,setBusy]=useState(false);
  async function load(){setBusy(true);setMsg('');const r=await supabase.rpc('admin_financial_summary_v4');setBusy(false);if(r.error){setMsg(friendlyError(r.error.message));return}setData(r.data||{})}
  useEffect(()=>{void load()},[]);
+ function downloadCsv(){
+  if(!data)return;
+  const rows=[['Metric','Value'],...Object.entries(data).map(([k,v])=>[k,String(v??'')])];
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const href=URL.createObjectURL(blob);const a=document.createElement('a');a.href=href;a.download=`financial-snapshot-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(href);
+ }
  return <main className="section"><div className="container stack">
-  <div className="actions" style={{justifyContent:'space-between'}}><Link href="/admin" className="btn">← Administration</Link><button className="btn" onClick={()=>void load()} disabled={busy}>{busy?'Refreshing…':'Refresh'}</button></div>
+  <div className="actions" style={{justifyContent:'space-between'}}><Link href="/admin" className="btn">← Administration</Link><div className="actions"><button className="btn" onClick={()=>void load()} disabled={busy}>{busy?'Refreshing…':'Refresh'}</button><button className="btn primary" onClick={downloadCsv} disabled={!data}>Download CSV</button></div></div>
   <section className="welcome"><div><p className="eyebrow" style={{color:'#a8e4c5'}}>Management reporting</p><h1>Financial snapshot</h1><p>Read-only cooperative totals calculated from the live member balance, registration, loan and withdrawal records.</p></div><span className="status">Live data</span></section>
   {msg&&<div className="alert error">{msg}</div>}
   {data&&<>
