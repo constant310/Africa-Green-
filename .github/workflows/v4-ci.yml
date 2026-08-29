@@ -1,0 +1,30 @@
+name: V4 CI
+
+on:
+  push:
+    branches: [ main, v4-production ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install
+      - run: npm run build
+      - name: Verify required routes exist
+        run: |
+          test -f app/page.tsx
+          test -f app/login/page.tsx
+          test -f app/register/page.tsx
+          test -f app/onboarding/page.tsx
+          test -f app/portal/page.tsx
+          test -f app/admin/page.tsx
+          test -f app/api/paystack/registration/route.ts
+          test -f app/api/paystack/wallet/route.ts
+          test -f app/api/paystack/webhook/route.ts
