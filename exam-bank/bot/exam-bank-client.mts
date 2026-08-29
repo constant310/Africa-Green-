@@ -13,7 +13,7 @@ type ExamQuestion = {
 
 function config() {
   const url = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   return { url, key };
 }
 
@@ -44,7 +44,7 @@ export async function getAvailableYears(examBody: string, subjectSlug: string, i
   const subjectRows = await supabase(`exam_subjects?slug=eq.${encodeURIComponent(subjectSlug)}&select=id&limit=1`);
   const subjectId = subjectRows?.[0]?.id;
   if (!subjectId) return [];
-  let path = `exam_papers?exam_body_slug=eq.${encodeURIComponent(examBody)}&subject_id=eq.${encodeURIComponent(subjectId)}&select=year,institution_id&year=not.is.null&order=year.desc`;
+  const path = `exam_papers?exam_body_slug=eq.${encodeURIComponent(examBody)}&subject_id=eq.${encodeURIComponent(subjectId)}&select=year,institution_id&year=not.is.null&order=year.desc`;
   const rows = await supabase(path);
   if (!institutionSlug) return [...new Set(rows.map((row: any) => Number(row.year)).filter(Number.isInteger))];
   const institutions = await supabase(`exam_institutions?slug=eq.${encodeURIComponent(institutionSlug)}&select=id&limit=1`);
