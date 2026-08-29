@@ -1,0 +1,2 @@
+Trigger final Cooperative V4 wallet deployment after Paystack and Supabase fallback fixes.
+Date: 2026-08-29
