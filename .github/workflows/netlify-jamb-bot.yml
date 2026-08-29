@@ -1,0 +1,25 @@
+name: Deploy JAMB Telegram Bot to Netlify
+
+on:
+  push:
+    branches: [ telegram-jamb-bot-test ]
+    paths:
+      - 'telegram-bot-netlify/**'
+      - '.github/workflows/netlify-jamb-bot.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Deploy bot backend to Netlify
+        working-directory: telegram-bot-netlify
+        run: >-
+          npx -y @netlify/mcp@latest
+          --site-id 9910922d-8ac1-4216-8f99-30bd0cdb61a7
+          --proxy-path "https://netlify-mcp.netlify.app/proxy/eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..2GjuOMEtTHn3PUjT.DDvsjsZdxRrh51k6OaSC7chF38MOFPeCavh3TJawhb94nEaHVNVVCOGM3kF8nPwOfmM7Wum4PrtZ-Tniy6WovqgmZWqJc1fEPfTt900AU7g71zvn8Wj9Xs4GXuR0B-Jpmd2x_prbo8HJLBEtGCTFMVBwIJZI978pqPGHk51jFpf2p9SNhs9mTbdFKN2Vvya9k4USeTOuqy55c-UGDMDVhgNW-56q6oJ0Wws8T3kQMCfXrtWGcmhMHcKd9qv-nr2GSBbYX0HX31bwS8zrA3LhRv150pVY1yMwn95nnELrOZtAV6n837KONIMTfowKds-lVgzUx8Cw690EV1cl7CYiHqBnXuxs9_KUiaZCln_GL--NKCSP4-3o6B2FUdyoiz_qZI1UjxpM.gQAFnNEo8xEsaA-i74l3CA"
