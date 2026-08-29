@@ -1,0 +1,2 @@
+Trigger Cooperative V4 production redeployment after Paystack test environment variables were added in Vercel.
+Date: 2026-08-29
