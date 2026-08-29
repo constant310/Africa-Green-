@@ -2,608 +2,95 @@ import { getStore } from "@netlify/blobs";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
 
-const SUBJECTS = [
-  ["agri", "Agriculture", "agriculture"], ["ara", "Arabic", "arabic"], ["art", "Art", "art"],
-  ["bio", "Biology", "biology"], ["chem", "Chemistry", "chemistry"],
-  ["crs", "Christian Religious Studies", "christian-religious-studies"], ["comm", "Commerce", "commerce"],
-  ["econ", "Economics", "economics"], ["fre", "French", "french"], ["geo", "Geography", "geography"],
-  ["gov", "Government", "government"], ["hau", "Hausa", "hausa"], ["hist", "History", "history"],
-  ["home", "Home Economics", "home-economics"], ["igb", "Igbo", "igbo"], ["isl", "Islamic Studies", "islamic-studies"],
-  ["lit", "Literature in English", "literature-in-english"], ["math", "Mathematics", "mathematics"],
-  ["mus", "Music", "music"], ["phy", "Physics", "physics"], ["acct", "Principles of Account", "principles-of-account"],
-  ["eng", "Use of English", "english-language"], ["yor", "Yoruba", "yoruba"], ["comp", "Computer Studies", "computer-studies"],
-  ["phe", "Physical & Health Education", "physical-and-health-education"],
-].map(([code, displayName, slug]) => ({ code, displayName, slug }));
+const EXAM_BANK_URL = "https://wsxszbdvvtowmrnxdsrp.supabase.co";
+const EXAM_BANK_KEY = "sb_publishable_JdUSYUZwX9RNdchmtUUEfw_ralc2WyT";
+const EXAM_BODY = "jamb";
 
-function escapeHtml(value = "") {
-  return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-}
-
-function telegramMethod(method, payload) {
-  return new Response(JSON.stringify({ method, ...payload }), {
-    status: 200,
-    headers: { "content-type": "application/json; charset=utf-8" },
-  });
-}
-
-function memoryStore() {
-  const root = globalThis;
-  if (!root.__jambBotMemory) root.__jambBotMemory = new Map();
-  return root.__jambBotMemory;
-}
-function memoryGet(key) {
-  const entry = memoryStore().get(key);
-  if (!entry || entry.expiresAt < Date.now()) {
-    if (entry) memoryStore().delete(key);
-    return null;
-  }
-  return entry.value;
-}
-function memorySet(key, value, ttlMs) {
-  memoryStore().set(key, { value, expiresAt: Date.now() + ttlMs });
-}
+function escapeHtml(value = "") { return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"); }
+function reply(method, payload) { return new Response(JSON.stringify({ method, ...payload }), { status: 200, headers: { "content-type": "application/json; charset=utf-8" } }); }
+function memory() { const root = globalThis; if (!root.__examBotMemory) root.__examBotMemory = new Map(); return root.__examBotMemory; }
+function memGet(key) { const v = memory().get(key); if (!v || v.expiresAt < Date.now()) { memory().delete(key); return null; } return v.value; }
+function memSet(key, value, ttl = 10 * 60 * 1000) { memory().set(key, { value, expiresAt: Date.now() + ttl }); }
 function cacheStore() { return getStore("jamb-bot-cache"); }
-function stateStore() { return getStore("jamb-bot-state", { consistency: "strong" }); }
 function configStore() { return getStore("jamb-bot-config", { consistency: "strong" }); }
+function questionStore() { return getStore("jamb-bot-state", { consistency: "strong" }); }
+async function cacheGet(key) { const m = memGet(`c:${key}`); if (m != null) return m; try { const v = await cacheStore().get(key, { type: "json" }); if (!v || v.expiresAt < Date.now()) return null; memSet(`c:${key}`, v.value); return v.value; } catch { return null; } }
+async function cacheSet(key, value, ttl) { memSet(`c:${key}`, value, Math.min(ttl, 10 * 60 * 1000)); try { await cacheStore().setJSON(key, { value, expiresAt: Date.now() + ttl }); } catch {} }
+async function loadConfig(url) { const id = url.searchParams.get("cfg") || ""; if (!id) return null; const m = memGet(`cfg:${id}`); if (m) return m; try { const cfg = await configStore().get(`cfg:${id}`, { type: "json" }); if (cfg) { memSet(`cfg:${id}`, cfg, 15 * 60 * 1000); return cfg; } } catch {} return null; }
+async function telegram(token, method, payload, timeout = 7000) { const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(timeout) }); const b = await r.json().catch(() => ({})); if (!r.ok || !b.ok) throw new Error(b?.description || `${method} failed`); return b.result; }
+async function db(path, params = {}) { const qs = new URLSearchParams(params); const r = await fetch(`${EXAM_BANK_URL}/rest/v1/${path}?${qs}`, { headers: { apikey: EXAM_BANK_KEY, Authorization: `Bearer ${EXAM_BANK_KEY}`, Accept: "application/json" }, signal: AbortSignal.timeout(5000) }); const b = await r.json().catch(() => ([])); if (!r.ok) throw new Error(b?.message || `Exam Bank returned ${r.status}`); return b; }
 
-async function cacheGet(key) {
-  const mem = memoryGet(`cache:${key}`);
-  if (mem != null) return mem;
-  try {
-    const item = await cacheStore().get(key, { type: "json" });
-    if (!item || Number(item.expiresAt || 0) < Date.now()) return null;
-    memorySet(`cache:${key}`, item.value, Math.min(Number(item.expiresAt) - Date.now(), 15 * 60 * 1000));
-    return item.value;
-  } catch { return null; }
+async function subjects() {
+  const cached = await cacheGet("subjects:exam-bank:v1"); if (Array.isArray(cached) && cached.length) return cached;
+  const rows = await db("exam_body_subjects", { select: "subject_id,official_subject_name,exam_subjects!inner(id,slug,name)", exam_body_slug: `eq.${EXAM_BODY}`, is_active: "eq.true", order: "official_subject_name.asc" });
+  const out = rows.map((r) => ({ id: r.subject_id, slug: r.exam_subjects?.slug, name: r.official_subject_name || r.exam_subjects?.name })).filter((x) => x.id && x.slug && x.name);
+  await cacheSet("subjects:exam-bank:v1", out, 24 * 60 * 60 * 1000); return out;
 }
-async function cacheSet(key, value, ttlMs) {
-  memorySet(`cache:${key}`, value, Math.min(ttlMs, 15 * 60 * 1000));
-  try { await cacheStore().setJSON(key, { value, expiresAt: Date.now() + ttlMs }); } catch {}
+async function years(subjectId) {
+  const key = `years:exam-bank:${subjectId}`; const cached = await cacheGet(key); if (Array.isArray(cached)) return cached;
+  const rows = await db("exam_questions", { select: "year", exam_body_slug: `eq.${EXAM_BODY}`, subject_id: `eq.${subjectId}`, content_status: "eq.published", year: "not.is.null", order: "year.desc" });
+  const out = [...new Set(rows.map((x) => Number(x.year)).filter(Number.isInteger))].sort((a,b)=>b-a); await cacheSet(key, out, 60 * 60 * 1000); return out;
 }
-async function stateGet(key) {
-  const mem = memoryGet(`state:${key}`);
-  if (mem != null) return mem;
-  try {
-    const item = await stateStore().get(key, { type: "json" });
-    if (!item || Number(item.expiresAt || 0) < Date.now()) return null;
-    memorySet(`state:${key}`, item.value, Math.min(Number(item.expiresAt) - Date.now(), 10 * 60 * 1000));
-    return item.value;
-  } catch { return null; }
+function normalizeQuestion(q, subject) {
+  const choices = Array.isArray(q.exam_question_choices) ? [...q.exam_question_choices].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)) : [];
+  const correct = choices.find((c) => c.is_correct === true)?.label || q.answer_text || "";
+  const asset = Array.isArray(q.exam_question_assets) ? q.exam_question_assets.find((a) => a.source_url || (a.storage_bucket && a.storage_path)) : null;
+  let imageUrl = asset?.source_url || "";
+  if (!imageUrl && asset?.storage_bucket && asset?.storage_path) imageUrl = `${EXAM_BANK_URL}/storage/v1/object/public/${encodeURIComponent(asset.storage_bucket)}/${asset.storage_path.split("/").map(encodeURIComponent).join("/")}`;
+  const passage = Array.isArray(q.exam_passages) ? q.exam_passages[0] : q.exam_passages;
+  return { id: q.id, subject: subject.name, subjectSlug: subject.slug, year: q.year, text: q.stem_markdown || q.stem || "", passage: passage?.content_markdown || passage?.content || "", options: choices.map((c) => ({ label: String(c.label || "").toUpperCase(), text: c.choice_markdown || c.choice_text || "" })), correctAnswer: String(correct || "").trim().slice(0,1).toUpperCase(), explanation: q.explanation || "", imageUrl, metadata: q.metadata || {} };
 }
-async function stateSet(key, value, ttlMs) {
-  memorySet(`state:${key}`, value, Math.min(ttlMs, 10 * 60 * 1000));
-  try { await stateStore().setJSON(key, { value, expiresAt: Date.now() + ttlMs }); } catch {}
+async function questionPool(subject, year) {
+  const key = `pool:exam-bank:${subject.id}:${year}`; const cached = await cacheGet(key); if (Array.isArray(cached) && cached.length) return cached;
+  const params = { select: "id,year,question_number,stem,stem_markdown,answer_text,explanation,metadata,passage_id,exam_question_choices(label,choice_text,choice_markdown,is_correct,sort_order),exam_question_assets(asset_type,storage_bucket,storage_path,source_url,alt_text),exam_passages(content,content_markdown)", exam_body_slug: `eq.${EXAM_BODY}`, subject_id: `eq.${subject.id}`, content_status: "eq.published", order: "created_at.desc", limit: "40" };
+  if (year !== "any") params.year = `eq.${year}`;
+  const rows = await db("exam_questions", params); const normalized = rows.map((q) => normalizeQuestion(q, subject)).filter((q) => q.options.length >= 2);
+  if (!normalized.length) throw new Error(`No published JAMB questions are available for ${subject.name}${year !== "any" ? ` ${year}` : ""} yet.`);
+  await cacheSet(key, normalized, 15 * 60 * 1000); return normalized;
 }
+function pick(pool, chatId, subjectId, year) { const k = `cursor:${chatId}:${subjectId}:${year}`; let i = Number(memGet(k)); if (!Number.isInteger(i)) i = Math.floor(Math.random() * pool.length); else i = (i + 1) % pool.length; memSet(k, i, 60 * 60 * 1000); return pool[i]; }
+function qid(q) { return createHash("sha1").update(String(q.id || q.text)).digest("hex").slice(0,12); }
+async function saveQuestion(chatId, subject, year, q) { const id = qid(q), value = { q, subject, year }; memSet(`q:${id}`, value, 2 * 60 * 60 * 1000); memSet(`last:${chatId}`, { ...value, id }, 2 * 60 * 60 * 1000); try { await questionStore().setJSON(`q:${id}`, { value, expiresAt: Date.now()+2*60*60*1000 }); await questionStore().setJSON(`last:${chatId}`, { value:{...value,id}, expiresAt:Date.now()+2*60*60*1000 }); } catch {} return id; }
+async function loadQuestion(id, chatId) { const m = memGet(id ? `q:${id}` : `last:${chatId}`); if (m) return m; try { const row = await questionStore().get(id ? `q:${id}` : `last:${chatId}`, { type: "json" }); if (row?.value && row.expiresAt > Date.now()) return row.value; } catch {} return null; }
 
-async function loadConfig(url) {
-  const configId = url.searchParams.get("cfg") || "";
-  if (configId) {
-    const cached = memoryGet(`config:${configId}`);
-    if (cached) return cached;
-    try {
-      const config = await configStore().get(`cfg:${configId}`, { type: "json" });
-      if (config) {
-        memorySet(`config:${configId}`, config, 15 * 60 * 1000);
-        return config;
-      }
-    } catch {}
-  }
-  return {
-    token: "",
-    aloc: url.searchParams.get("aloc") || "",
-    groq: url.searchParams.get("groq") || "",
-    cfAccount: url.searchParams.get("cf_account") || "",
-    cfToken: url.searchParams.get("cf_token") || "",
-  };
-}
+function subjectMenu(list, page=0) { const size=10, pages=Math.max(1,Math.ceil(list.length/size)), p=Math.max(0,Math.min(page,pages-1)), visible=list.slice(p*size,p*size+size), rows=[]; for(let i=0;i<visible.length;i+=2) rows.push(visible.slice(i,i+2).map(s=>({text:s.name,callback_data:`s:${s.id}`}))); if(pages>1){const nav=[]; if(p>0)nav.push({text:"⬅️",callback_data:`sp:${p-1}`}); nav.push({text:`${p+1}/${pages}`,callback_data:"noop"}); if(p<pages-1)nav.push({text:"➡️",callback_data:`sp:${p+1}`}); rows.push(nav);} return { text:`🎓 <b>JAMB Practice Bot</b>\n\nChoose a subject.\n\n<b>${list.length} JAMB subjects</b>\n⚡ Exam Bank fast mode\n<i>Questions from your Exam Bank database</i>`, reply_markup:{inline_keyboard:rows} }; }
+function yearMenu(subject, ys, page=0) { const size=12,pages=Math.max(1,Math.ceil(ys.length/size)),p=Math.max(0,Math.min(page,pages-1)),v=ys.slice(p*size,p*size+size),rows=[[{text:"🎯 Random — any year",callback_data:`q:${subject.id}:any`}]]; for(let i=0;i<v.length;i+=3) rows.push(v.slice(i,i+3).map(y=>({text:String(y),callback_data:`q:${subject.id}:${y}`}))); if(pages>1){const n=[];if(p>0)n.push({text:"⬅️",callback_data:`yp:${subject.id}:${p-1}`});n.push({text:`${p+1}/${pages}`,callback_data:"noop"});if(p<pages-1)n.push({text:"➡️",callback_data:`yp:${subject.id}:${p+1}`});rows.push(n);} rows.push([{text:"📚 Subjects",callback_data:"subjects"}]); return { text:`📘 <b>${escapeHtml(subject.name)}</b>\n\nChoose a year.${ys.length?`\n\n${ys.length} years currently populated.`:"\n\nNo published questions are populated for this subject yet."}`, reply_markup:{inline_keyboard:rows} }; }
+function questionHtml(q) { const passage=q.passage?`<b>Passage</b>\n${escapeHtml(q.passage)}\n\n`:""; const opts=q.options.map(o=>`<b>${escapeHtml(o.label)}.</b> ${escapeHtml(o.text)}`).join("\n"); return (`<b>${escapeHtml(q.subject)} — JAMB${q.year?` ${q.year}`:""}</b>\n\n${passage}${escapeHtml(q.text)}\n\n${opts}\n\n<i>Exam Bank</i>`).slice(0,3900); }
+function questionButtons(q, id, subject, year) { return { inline_keyboard:[q.options.map(o=>({text:o.label,callback_data:`a:${id}:${o.label}`})),[{text:"💡 Explain",callback_data:`e:${id}`},{text:"🎨 Diagram",callback_data:`v:${id}`}],[{text:"➡️ Next",callback_data:`q:${subject.id}:${year}`}],[{text:"📅 Year",callback_data:`s:${subject.id}`},{text:"📚 Subjects",callback_data:"subjects"}]] }; }
+function resultButtons(id, subject, year) { return {inline_keyboard:[[{text:"💡 Explain",callback_data:`e:${id}`},{text:"🎨 Diagram",callback_data:`v:${id}`}],[{text:"➡️ Next",callback_data:`q:${subject.id}:${year}`}],[{text:"📚 Subjects",callback_data:"subjects"}]]}; }
 
-async function telegram(token, method, payload = {}, timeoutMs = 7000) {
-  if (!token) throw new Error("Telegram token unavailable in server configuration.");
-  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok || !body?.ok) throw new Error(body?.description || `${method} failed`);
-  return body.result;
-}
-
-function subjectFromToken(token) {
-  const value = String(token || "").trim();
-  return SUBJECTS.find((s) => s.code === value || s.slug === value) || null;
-}
-
-function subjectMenu(page = 0) {
-  const pageSize = 10;
-  const pageCount = Math.max(1, Math.ceil(SUBJECTS.length / pageSize));
-  const safePage = Math.min(Math.max(0, Number(page) || 0), pageCount - 1);
-  const visible = SUBJECTS.slice(safePage * pageSize, safePage * pageSize + pageSize);
-  const rows = [];
-  for (let i = 0; i < visible.length; i += 2) {
-    rows.push(visible.slice(i, i + 2).map((s) => ({ text: s.displayName, callback_data: `s:${s.code}` })));
-  }
-  if (pageCount > 1) {
-    const nav = [];
-    if (safePage > 0) nav.push({ text: "⬅️ Previous", callback_data: `sp:${safePage - 1}` });
-    nav.push({ text: `${safePage + 1}/${pageCount}`, callback_data: "noop" });
-    if (safePage < pageCount - 1) nav.push({ text: "Next ➡️", callback_data: `sp:${safePage + 1}` });
-    rows.push(nav);
-  }
-  return {
-    text: `🎓 <b>JAMB Practice Bot</b>\n\nChoose a subject below.\n\n<b>${SUBJECTS.length} subjects available</b>\n⚡ Fast mode enabled\n<i>Questions powered by ALOC API</i>`,
-    reply_markup: { inline_keyboard: rows },
-  };
-}
-
-async function alocFetch(path, apiKey) {
-  const response = await fetch(`https://dev.aloc.com.ng/api/v1${path}`, {
-    headers: { "X-API-Key": apiKey, Accept: "application/json" },
-    signal: AbortSignal.timeout(7000),
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body?.message || body?.error || `ALOC returned ${response.status}`);
-  return body;
-}
-
-async function getYears(subject, apiKey) {
-  const key = `years:v4:${subject.code}`;
-  const cached = await cacheGet(key);
-  if (Array.isArray(cached) && cached.length) return cached;
-  try {
-    const body = await alocFetch(`/subjects/${encodeURIComponent(subject.slug)}/years`, apiKey);
-    const years = (Array.isArray(body?.data) ? body.data : [])
-      .filter((item) => Number(item?.breakdown?.jamb || 0) > 0 || !Array.isArray(item?.examTypes) || item.examTypes.includes("jamb"))
-      .map((item) => Number(item?.year))
-      .filter((year) => Number.isInteger(year) && year > 1980 && year < 2100)
-      .sort((a, b) => b - a);
-    const unique = [...new Set(years)];
-    await cacheSet(key, unique, 24 * 60 * 60 * 1000);
-    return unique;
-  } catch { return []; }
-}
-
-function yearMenu(subject, years, page = 0) {
-  const pageSize = 12;
-  const pageCount = Math.max(1, Math.ceil(years.length / pageSize));
-  const safePage = Math.min(Math.max(0, Number(page) || 0), pageCount - 1);
-  const visible = years.slice(safePage * pageSize, safePage * pageSize + pageSize);
-  const rows = [[{ text: "🎯 Random question — any year", callback_data: `q:${subject.code}:any` }]];
-  for (let i = 0; i < visible.length; i += 3) {
-    rows.push(visible.slice(i, i + 3).map((year) => ({ text: String(year), callback_data: `q:${subject.code}:${year}` })));
-  }
-  if (pageCount > 1) {
-    const nav = [];
-    if (safePage > 0) nav.push({ text: "⬅️", callback_data: `yp:${subject.code}:${safePage - 1}` });
-    nav.push({ text: `${safePage + 1}/${pageCount}`, callback_data: "noop" });
-    if (safePage < pageCount - 1) nav.push({ text: "➡️", callback_data: `yp:${subject.code}:${safePage + 1}` });
-    rows.push(nav);
-  }
-  rows.push([{ text: "📚 All subjects", callback_data: "subjects" }]);
-  return {
-    text: `📘 <b>${escapeHtml(subject.displayName)}</b>\n\nChoose a JAMB year, or use a random question from any available year.${years.length ? `\n\n${years.length} years available.` : "\n\nYear catalogue unavailable; random practice still works."}`,
-    reply_markup: { inline_keyboard: rows },
-  };
-}
-
-function optionEntries(options) {
-  if (Array.isArray(options)) return options.slice(0, 5).map((v, i) => [String.fromCharCode(97 + i), String(v)]);
-  if (options && typeof options === "object") {
-    return Object.entries(options).filter(([k, v]) => /^[a-e]$/i.test(k) && v != null).map(([k, v]) => [k.toLowerCase(), String(v)]);
-  }
-  return [];
-}
-
-function extractImageUrl(question) {
-  const candidates = [question?.imageUrl, question?.questionImageUrl, question?.diagramUrl, question?.image, question?.diagram, question?.media?.url, question?.media?.imageUrl, question?.assets?.diagram, question?.assets?.image];
-  for (const value of candidates) {
-    if (typeof value !== "string") continue;
-    try {
-      const parsed = new URL(value);
-      if (parsed.protocol === "https:" || parsed.protocol === "http:") return parsed.toString();
-    } catch {}
-  }
-  return "";
-}
-
-function extractLatex(question) {
-  for (const value of [question?.latex, question?.equation, question?.formula, question?.mathLatex]) {
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  const text = String(question?.text || question?.question || "");
-  for (const pattern of [/\$\$([^$]{2,500})\$\$/, /\$([^$\n]{2,500})\$/, /\\\[([\s\S]{2,500}?)\\\]/, /\\\(([\s\S]{2,500}?)\\\)/]) {
-    const match = text.match(pattern);
-    if (match?.[1]) return match[1].trim();
-  }
-  return "";
-}
-
-function officialAnswer(q) { return String(q?.correctAnswer || q?.answer || "").trim().toLowerCase(); }
-function questionIdentity(q) {
-  return createHash("sha256").update(`${q?.id || ""}|${q?.subject || ""}|${q?.year || ""}|${q?.text || q?.question || ""}`).digest("hex").slice(0, 14);
-}
-
-async function getQuestionPool(subject, year, apiKey) {
-  const key = `pool:v4:${subject.code}:${year}`;
-  const cached = await cacheGet(key);
-  if (Array.isArray(cached) && cached.length) return cached;
-  const params = new URLSearchParams({ subject: subject.slug, examType: "jamb", random: "true", limit: "10" });
-  if (year !== "any") params.set("year", year);
-  const body = await alocFetch(`/questions?${params.toString()}`, apiKey);
-  const questions = Array.isArray(body?.data) ? body.data : body?.data ? [body.data] : [];
-  if (!questions.length) throw new Error(`No JAMB question found for ${subject.displayName}${year !== "any" ? ` in ${year}` : ""}.`);
-  await cacheSet(key, questions, 30 * 60 * 1000);
-  return questions;
-}
-
-function selectQuestion(pool, chatId, subject, year) {
-  const key = `cursor:${chatId}:${subject.code}:${year}`;
-  let index = Number(memoryGet(key));
-  if (!Number.isInteger(index)) {
-    const seed = createHash("sha1").update(`${chatId}:${Date.now()}:${subject.code}:${year}`).digest().readUInt32BE(0);
-    index = seed % pool.length;
-  } else index = (index + 1) % pool.length;
-  memorySet(key, index, 30 * 60 * 1000);
-  return pool[index];
-}
-
-async function rememberQuestion(chatId, subject, year, question) {
-  const qid = questionIdentity(question);
-  const value = { question, subjectCode: subject.code, year };
-  await Promise.all([
-    stateSet(`question:${qid}`, value, 2 * 60 * 60 * 1000),
-    stateSet(`last:${chatId}`, { ...value, qid }, 2 * 60 * 60 * 1000),
-  ]);
-  return qid;
-}
-async function getRememberedQuestion(qid, chatId = "") {
-  if (qid) {
-    const saved = await stateGet(`question:${qid}`);
-    if (saved?.question) return { ...saved, qid };
-  }
-  return chatId ? stateGet(`last:${chatId}`) : null;
-}
-
-function questionHtml(question, subject) {
-  const entries = optionEntries(question?.options);
-  const passage = question?.hasPassage && question?.section ? `<b>Passage</b>\n${escapeHtml(question.section)}\n\n` : "";
-  const optionsText = entries.map(([letter, text]) => `<b>${letter.toUpperCase()}.</b> ${escapeHtml(text)}`).join("\n");
-  let text = `<b>${escapeHtml(subject.displayName)} — JAMB${question?.year ? ` ${question.year}` : ""}</b>\n\n${passage}${escapeHtml(question?.text || question?.question || "Question unavailable")}\n\n${optionsText}\n\n<i>Powered by ALOC API</i>`;
-  if (text.length > 3900) text = `${text.slice(0, 3800)}…\n\n<i>Powered by ALOC API</i>`;
-  return { text, entries };
-}
-
-function questionButtons(subject, year, entries, question, qid) {
-  const correct = officialAnswer(question);
-  const safeCorrect = /^[a-e]$/.test(correct) ? correct : "x";
-  const rows = [entries.map(([letter]) => ({ text: letter.toUpperCase(), callback_data: `ans:${letter}:${safeCorrect}:${subject.code}:${year}:${qid}` }))];
-  if (extractLatex(question)) rows.push([{ text: "🧮 Render maths", callback_data: `math:${qid}` }]);
-  rows.push([{ text: "💡 Explain", callback_data: `ex:${qid}` }, { text: "🎨 Diagram / Graph", callback_data: `viz:${qid}` }]);
-  rows.push([{ text: "🤖 Ask AI Tutor", callback_data: `ask:${qid}` }]);
-  rows.push([{ text: "➡️ Next question", callback_data: `q:${subject.code}:${year}` }]);
-  rows.push([{ text: "📅 Change year", callback_data: `s:${subject.code}` }, { text: "📚 Subjects", callback_data: "subjects" }]);
-  return { inline_keyboard: rows };
-}
-function resultButtons(subject, year, qid) {
-  return { inline_keyboard: [
-    [{ text: "💡 Explain", callback_data: `ex:${qid}` }, { text: "🎨 Visualize", callback_data: `viz:${qid}` }],
-    [{ text: "🤖 Ask AI Tutor", callback_data: `ask:${qid}` }],
-    [{ text: "➡️ Next question", callback_data: `q:${subject.code}:${year}` }],
-    [{ text: "📅 Change year", callback_data: `s:${subject.code}` }, { text: "📚 Subjects", callback_data: "subjects" }],
-  ] };
-}
-
-function editCurrentResponse(callback, text, replyMarkup) {
-  if (callback.message.photo) {
-    return telegramMethod("sendMessage", { chat_id: callback.message.chat.id, text, parse_mode: "HTML", reply_markup: replyMarkup, disable_web_page_preview: true });
-  }
-  return telegramMethod("editMessageText", { chat_id: callback.message.chat.id, message_id: callback.message.message_id, text, parse_mode: "HTML", reply_markup: replyMarkup, disable_web_page_preview: true });
-}
-async function editOrSendDirect(token, callback, text, replyMarkup) {
-  const payload = { chat_id: callback.message.chat.id, text, parse_mode: "HTML", reply_markup: replyMarkup, disable_web_page_preview: true };
-  if (!callback.message.photo) {
-    try { return await telegram(token, "editMessageText", { ...payload, message_id: callback.message.message_id }); } catch {}
-  }
-  return telegram(token, "sendMessage", payload);
-}
-
-async function deliverQuestionDirect(config, callback, subject, year, question) {
-  const qid = await rememberQuestion(callback.message.chat.id, subject, year, question);
-  const { text, entries } = questionHtml(question, subject);
-  const imageUrl = extractImageUrl(question);
-  if (imageUrl) {
-    try { await telegram(config.token, "sendPhoto", { chat_id: callback.message.chat.id, photo: imageUrl, caption: `🖼 Diagram for ${subject.displayName}${question?.year ? ` — JAMB ${question.year}` : ""}` }); } catch {}
-  }
-  await editOrSendDirect(config.token, callback, text, questionButtons(subject, year, entries, question, qid));
-}
-
-function buildTutorPrompt(question, instruction) {
-  const options = optionEntries(question?.options).map(([l, t]) => `${l.toUpperCase()}. ${t}`).join("\n");
-  return [
-    "You are an expert Nigerian JAMB/UTME tutor.",
-    "Solve independently. The official answer is checked separately, so do not blindly trust it.",
-    "Return concise teaching steps, not hidden chain-of-thought.",
-    "For Mathematics, Physics and Chemistry, use correct formulas and put one useful LaTeX expression in key_latex.",
-    "If a graph or diagram materially improves understanding, return valid Mermaid code or Vega JSON.",
-    "Use visualization_kind='none' if a visual would not help. Never invent facts or labels not supported by the question.",
-    `Subject: ${question?.subject || ""}`, `Year: ${question?.year || ""}`,
-    `Question: ${question?.text || question?.question || ""}`, `Options:\n${options}`,
-    `Student request: ${instruction || "Explain the correct answer clearly."}`,
-  ].join("\n");
-}
-
-const TUTOR_SCHEMA = {
-  name: "jamb_tutor", strict: true,
-  schema: {
-    type: "object",
-    properties: {
-      answer: { type: "string", enum: ["A", "B", "C", "D", "E", ""] },
-      explanation: { type: "string" }, steps: { type: "array", items: { type: "string" }, maxItems: 5 },
-      key_latex: { type: "string" }, visualization_kind: { type: "string", enum: ["none", "mermaid", "vega"] },
-      visualization_code: { type: "string" }, confidence: { type: "number", minimum: 0, maximum: 1 },
-    },
-    required: ["answer", "explanation", "steps", "key_latex", "visualization_kind", "visualization_code", "confidence"],
-    additionalProperties: false,
-  },
-};
-
-function tutorContent(prompt, imageUrl) {
-  return imageUrl ? [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: imageUrl } }] : prompt;
-}
-function parseTutorResult(raw, provider) {
-  let text = typeof raw === "string" ? raw : Array.isArray(raw) ? raw.map((p) => p?.text || "").join("") : "";
-  text = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-  try { return { ...JSON.parse(text), provider }; } catch {}
-  const match = text.match(/\{[\s\S]*\}/);
-  if (match) { try { return { ...JSON.parse(match[0]), provider }; } catch {} }
-  return { answer: "", explanation: text || "The AI tutor returned an unreadable response.", steps: [], key_latex: "", visualization_kind: "none", visualization_code: "", confidence: 0, provider };
-}
-
-async function groqTutor(question, key, instruction) {
-  if (!key) throw new Error("Groq is not configured.");
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "qwen/qwen3.8-27b",
-      messages: [
-        { role: "system", content: "Return only valid JSON matching the schema. Be concise, accurate and exam-focused." },
-        { role: "user", content: tutorContent(buildTutorPrompt(question, instruction), extractImageUrl(question)) },
-      ],
-      temperature: 0.15, max_completion_tokens: 550, reasoning_effort: "low", reasoning_format: "hidden",
-      response_format: { type: "json_schema", json_schema: TUTOR_SCHEMA },
-    }),
-    signal: AbortSignal.timeout(9000),
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body?.error?.message || body?.message || `Groq returned ${response.status}`);
-  return parseTutorResult(body?.choices?.[0]?.message?.content, "Groq · Qwen3.8-27B");
-}
-
-async function cloudflareTutor(question, accountId, apiToken, instruction) {
-  if (!accountId || !apiToken) throw new Error("Cloudflare Workers AI is not configured.");
-  const prompt = `${buildTutorPrompt(question, instruction)}\n\nReturn JSON only with keys: answer, explanation, steps, key_latex, visualization_kind, visualization_code, confidence.`;
-  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/v1/chat/completions`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "@cf/google/gemma-4-26b-a4b-it",
-      messages: [
-        { role: "system", content: "You are a concise JAMB tutor. Return JSON only." },
-        { role: "user", content: tutorContent(prompt, extractImageUrl(question)) },
-      ],
-      temperature: 0.15, max_completion_tokens: 550, reasoning_effort: "low",
-    }),
-    signal: AbortSignal.timeout(12000),
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok || body?.success === false) throw new Error(body?.errors?.[0]?.message || body?.error?.message || body?.message || `Cloudflare returned ${response.status}`);
-  return parseTutorResult(body?.choices?.[0]?.message?.content ?? body?.result?.response ?? body?.result, "Cloudflare · Gemma 4 26B");
-}
-
-async function aiTutor(question, config, instruction) {
-  const errors = [];
-  if (config.groq) {
-    try { return await groqTutor(question, config.groq, instruction); }
-    catch (e) { errors.push(`Groq: ${e?.message || "failed"}`); }
-  }
-  if (config.cfAccount && config.cfToken) {
-    try { return await cloudflareTutor(question, config.cfAccount, config.cfToken, instruction); }
-    catch (e) { errors.push(`Cloudflare: ${e?.message || "failed"}`); }
-  }
-  if (!config.groq && !(config.cfAccount && config.cfToken)) throw new Error("Free AI is not configured yet. Add a Groq key and/or Cloudflare Workers AI credentials on /setup.");
-  throw new Error(`Both free AI providers were unavailable. ${errors.join(" | ")}`);
-}
-async function cachedAiTutor(question, config) {
-  const key = `ai:v4:${questionIdentity(question)}`;
-  const cached = await cacheGet(key);
-  if (cached) return cached;
-  const result = await aiTutor(question, config, "Explain this JAMB question clearly. Add a diagram or graph only when it genuinely improves understanding.");
-  await cacheSet(key, result, 7 * 24 * 60 * 60 * 1000);
-  return result;
-}
-
-function explanationHtml(question, ai) {
-  const official = officialAnswer(question), aiAnswer = String(ai?.answer || "").trim().toLowerCase();
-  if (/^[a-e]$/.test(official) && /^[a-e]$/.test(aiAnswer) && official !== aiAnswer) {
-    return `⚠️ <b>Answer check needs review</b>\n\nALOC official answer: <b>${official.toUpperCase()}</b>\n${escapeHtml(ai?.provider || "AI")} independent answer: <b>${aiAnswer.toUpperCase()}</b>\n\nThe bot will not present the AI explanation as authoritative while these disagree.`;
-  }
-  const steps = Array.isArray(ai?.steps) && ai.steps.length ? `\n\n<b>Steps</b>\n${ai.steps.map((s, i) => `${i + 1}. ${escapeHtml(s)}`).join("\n")}` : "";
-  let text = `${/^[a-e]$/.test(official) ? `✅ <b>Official answer: ${official.toUpperCase()}</b>\n\n` : ""}<b>AI Tutor</b> <i>${escapeHtml(ai?.provider || "")}</i>\n\n${escapeHtml(ai?.explanation || "No explanation returned.")}${steps}`;
-  if (ai?.key_latex) text += `\n\n🧮 <b>Key formula:</b> <code>${escapeHtml(ai.key_latex)}</code>`;
-  if (Number.isFinite(ai?.confidence)) text += `\n\nConfidence: ${Math.round(Number(ai.confidence) * 100)}%`;
-  return text.slice(0, 3900);
-}
-function latexImageUrl(latex) {
-  const value = String(latex || "").trim();
-  return value ? `https://latex.codecogs.com/png.image?${encodeURIComponent(`\\dpi{170} ${value}`)}` : "";
-}
-function krokiImageUrl(kind, code) {
-  if (!["mermaid", "vega"].includes(kind) || !code || String(code).length > 7000) return "";
-  try { return `https://kroki.io/${kind}/png/${deflateSync(Buffer.from(String(code), "utf8"), { level: 9 }).toString("base64url")}`; } catch { return ""; }
-}
-function aiVisualUrl(ai) { return krokiImageUrl(String(ai?.visualization_kind || "none"), String(ai?.visualization_code || "")) || latexImageUrl(ai?.key_latex || ""); }
-function aiEnabled(config) { return Boolean(config.groq || (config.cfAccount && config.cfToken)); }
-function helpText(config) {
-  const provider = config.groq && config.cfAccount && config.cfToken ? "Groq primary + Cloudflare fallback" : config.groq ? "Groq Qwen3.8-27B" : config.cfAccount && config.cfToken ? "Cloudflare Gemma 4 26B" : "not configured";
-  return `🎓 <b>JAMB Practice Bot</b>\n\n• /start — choose subject and year\n• A/B/C/D — instant grading\n• 💡 Explain — free AI worked solution\n• 🎨 Diagram / Graph — visual solution when useful\n• 🧮 Render maths — clean formula view\n• /ask your question — ask about the current question\n\nAI: <b>${escapeHtml(provider)}</b>\n⚡ Fast background processing enabled\n<i>Questions powered by ALOC API</i>`;
-}
-
-async function showYearMenuDirect(config, callback, subject, page = 0) {
-  const years = await getYears(subject, config.aloc);
-  const menu = yearMenu(subject, years, page);
-  await editOrSendDirect(config.token, callback, menu.text, menu.reply_markup);
-  await getQuestionPool(subject, "any", config.aloc).catch(() => {});
-}
-async function showQuestionDirect(config, callback, subject, year) {
-  const pool = await getQuestionPool(subject, year, config.aloc);
-  await deliverQuestionDirect(config, callback, subject, year, selectQuestion(pool, callback.message.chat.id, subject, year));
-}
-async function explainDirect(config, chatId, qid, mode) {
-  const saved = await getRememberedQuestion(qid, String(chatId));
-  if (!saved?.question) return telegram(config.token, "sendMessage", { chat_id: chatId, text: "Question session expired. Send /start and open another question." });
-  if (mode === "math") {
-    let latex = extractLatex(saved.question);
-    if (!latex && aiEnabled(config)) latex = (await cachedAiTutor(saved.question, config))?.key_latex || "";
-    const image = latexImageUrl(latex);
-    return image ? telegram(config.token, "sendPhoto", { chat_id: chatId, photo: image, caption: "🧮 Mathematical view" }) : telegram(config.token, "sendMessage", { chat_id: chatId, text: "I could not identify a useful mathematical expression to render." });
-  }
-  const ai = await cachedAiTutor(saved.question, config);
-  if (mode === "visual") {
-    const image = aiVisualUrl(ai);
-    return image ? telegram(config.token, "sendPhoto", { chat_id: chatId, photo: image, caption: `🎨 Learning visual · ${ai.provider || "AI"}` }) : telegram(config.token, "sendMessage", { chat_id: chatId, text: "This solution does not need a useful diagram or graph. Tap 💡 Explain for the worked solution." });
-  }
-  const text = explanationHtml(saved.question, ai), visual = aiVisualUrl(ai);
-  if (visual && text.length <= 900) {
-    try { return await telegram(config.token, "sendPhoto", { chat_id: chatId, photo: visual, caption: text, parse_mode: "HTML" }); } catch {}
-  }
-  return telegram(config.token, "sendMessage", { chat_id: chatId, text, parse_mode: "HTML" });
-}
-async function askDirect(config, chatId, instruction) {
-  const saved = await getRememberedQuestion("", String(chatId));
-  if (!saved?.question) return telegram(config.token, "sendMessage", { chat_id: chatId, text: "Open a JAMB question first with /start, then ask me about it." });
-  const ai = await aiTutor(saved.question, config, instruction);
-  return telegram(config.token, "sendMessage", { chat_id: chatId, text: explanationHtml(saved.question, ai), parse_mode: "HTML" });
-}
-function schedule(context, task) {
-  if (!context?.waitUntil) return false;
-  context.waitUntil(Promise.resolve(task).catch((error) => console.error("background task failed", error)));
-  return true;
-}
+function promptFor(q, request="Explain this question clearly and concisely.") { return `You are a Nigerian JAMB tutor. Give concise pedagogical reasoning, not hidden chain-of-thought. Return JSON only with keys answer, explanation, steps, key_latex, visualization_kind, visualization_code, confidence. visualization_kind must be none, mermaid, or vega.\nSubject: ${q.subject}\nYear: ${q.year||""}\nQuestion: ${q.text}\nOptions:\n${q.options.map(o=>`${o.label}. ${o.text}`).join("\n")}\nStudent request: ${request}`; }
+function parseJson(text) { try { const m=String(text).match(/\{[\s\S]*\}/); return JSON.parse(m?m[0]:text); } catch { return {answer:"",explanation:String(text||""),steps:[],key_latex:"",visualization_kind:"none",visualization_code:"",confidence:0}; } }
+async function groqTutor(q,key,request) { const content = q.imageUrl ? [{type:"text",text:promptFor(q,request)},{type:"image_url",image_url:{url:q.imageUrl}}] : promptFor(q,request); const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:"qwen/qwen3.8-27b",messages:[{role:"user",content}],temperature:0.1,max_completion_tokens:650,reasoning_effort:"none",response_format:{type:"json_object"}}),signal:AbortSignal.timeout(11000)}); const b=await r.json().catch(()=>({})); if(!r.ok)throw new Error(b?.error?.message||`Groq ${r.status}`); return {...parseJson(b?.choices?.[0]?.message?.content),provider:"Groq Qwen3.8-27B"}; }
+async function cloudflareTutor(q,account,token,request) { const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/ai/run/@cf/google/gemma-4-26b-a4b-it`,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({messages:[{role:"user",content:promptFor(q,request)}],max_tokens:650,temperature:0.1}),signal:AbortSignal.timeout(13000)}); const b=await r.json().catch(()=>({})); if(!r.ok||b?.success===false)throw new Error(b?.errors?.[0]?.message||`Cloudflare ${r.status}`); return {...parseJson(b?.result?.response||b?.result),provider:"Cloudflare Gemma 4 26B"}; }
+async function tutor(q,cfg,request) { const key=`ai:${q.id}:${createHash("md5").update(request).digest("hex").slice(0,8)}`; const cached=await cacheGet(key); if(cached)return cached; let out; try { if(!cfg?.groq)throw new Error("Groq unavailable"); out=await groqTutor(q,cfg.groq,request); } catch(e){ if(!cfg?.cfAccount||!cfg?.cfToken)throw e; out=await cloudflareTutor(q,cfg.cfAccount,cfg.cfToken,request); } await cacheSet(key,out,7*24*60*60*1000); return out; }
+function explanation(q,ai){ const official=String(q.correctAnswer||"").toUpperCase(), a=String(ai.answer||"").toUpperCase(); if(official&&a&&official!==a)return `⚠️ <b>Answer discrepancy</b>\n\nExam Bank answer: <b>${official}</b>\nAI answer: <b>${a}</b>\n\nThis item should be reviewed.`; const steps=Array.isArray(ai.steps)&&ai.steps.length?`\n\n<b>Steps</b>\n${ai.steps.slice(0,6).map((s,i)=>`${i+1}. ${escapeHtml(s)}`).join("\n")}`:""; return `✅ <b>Answer: ${escapeHtml(official||a||"—")}</b>\n\n<b>${escapeHtml(ai.provider||"AI Tutor")}</b>\n\n${escapeHtml(ai.explanation||q.explanation||"No explanation available.")}${steps}`.slice(0,3900); }
+function latexUrl(v){return v?`https://latex.codecogs.com/png.image?${encodeURIComponent(`\\dpi{170} ${v}`)}`:"";}
+function visualUrl(ai){ const kind=String(ai.visualization_kind||"none"),code=String(ai.visualization_code||""); if(["mermaid","vega"].includes(kind)&&code){try{return `https://kroki.io/${kind}/png/${deflateSync(Buffer.from(code)).toString("base64url")}`;}catch{}} return latexUrl(ai.key_latex||""); }
 
 export default async (req, context) => {
-  const url = new URL(req.url);
-  const webhookSecret = url.searchParams.get("secret") || "";
-  if (req.method === "GET") return Response.json({ ok: true, service: "jamb123bot-webhook", version: "free-ai-fast-v4", aiPrimary: "groq:qwen/qwen3.8-27b", aiFallback: "cloudflare:@cf/google/gemma-4-26b-a4b-it", cache: "memory+netlify-blobs", background: "netlify-waitUntil" });
-  if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
-  if (!webhookSecret) return new Response("Webhook not configured", { status: 503 });
-  if (req.headers.get("x-telegram-bot-api-secret-token") !== webhookSecret) return new Response("Unauthorized", { status: 401 });
-
-  try {
-    const update = await req.json();
-    if (update.message) {
-      const chatId = update.message.chat.id;
-      const text = String(update.message.text || "").trim();
-      if (text === "/start" || text.startsWith("/start@")) {
-        const menu = subjectMenu(0);
-        return telegramMethod("sendMessage", { chat_id: chatId, text: menu.text, parse_mode: "HTML", reply_markup: menu.reply_markup });
-      }
-      if (!text.startsWith("/ask") && text !== "/help" && !text.startsWith("/help@")) {
-        const menu = subjectMenu(0);
-        return telegramMethod("sendMessage", { chat_id: chatId, text: "Send /start to choose a JAMB subject, or /help for options.", reply_markup: menu.reply_markup });
-      }
-      const config = await loadConfig(url);
-      if (!config?.aloc) return telegramMethod("sendMessage", { chat_id: chatId, text: "Bot configuration is incomplete. Reconnect it from /setup." });
-      if (text === "/help" || text.startsWith("/help@")) return telegramMethod("sendMessage", { chat_id: chatId, text: helpText(config), parse_mode: "HTML" });
-      if (text === "/ask" || text.startsWith("/ask@")) return telegramMethod("sendMessage", { chat_id: chatId, text: "Use <code>/ask your question</code> after opening a JAMB question.\nExample: <code>/ask why is option B correct?</code>", parse_mode: "HTML" });
-      if (text.startsWith("/ask ")) {
-        const instruction = text.slice(5).trim();
-        if (config.token && schedule(context, askDirect(config, chatId, instruction))) return telegramMethod("sendChatAction", { chat_id: chatId, action: "typing" });
-        try {
-          const saved = await getRememberedQuestion("", String(chatId));
-          if (!saved?.question) return telegramMethod("sendMessage", { chat_id: chatId, text: "Open a JAMB question first with /start, then ask me about it." });
-          const ai = await aiTutor(saved.question, config, instruction);
-          return telegramMethod("sendMessage", { chat_id: chatId, text: explanationHtml(saved.question, ai), parse_mode: "HTML" });
-        } catch (error) { return telegramMethod("sendMessage", { chat_id: chatId, text: `❌ ${escapeHtml(error?.message || "AI tutor failed.")}`, parse_mode: "HTML" }); }
-      }
-    }
-
-    if (update.callback_query) {
-      const callback = update.callback_query, chatId = callback.message?.chat?.id, messageId = callback.message?.message_id, data = String(callback.data || "");
-      if (!chatId || !messageId) return Response.json({ ok: true });
-      if (data === "noop") return telegramMethod("answerCallbackQuery", { callback_query_id: callback.id });
-      if (data === "subjects" || data.startsWith("sp:")) {
-        const menu = subjectMenu(data.startsWith("sp:") ? Number(data.split(":")[1] || 0) : 0);
-        return editCurrentResponse(callback, menu.text, menu.reply_markup);
-      }
-      if (data.startsWith("ans:")) {
-        const parts = data.split(":"), selected = String(parts[1] || "").toLowerCase(), correct = String(parts[2] || "").toLowerCase(), subject = subjectFromToken(parts[3]), year = parts[4] || "any", qid = parts[5] || "";
-        if (subject && /^[a-e]$/.test(correct)) {
-          const result = selected === correct ? `✅ <b>Correct!</b> You chose ${selected.toUpperCase()}.` : `❌ <b>Incorrect.</b> You chose ${selected.toUpperCase()}. Official answer: <b>${correct.toUpperCase()}</b>.`;
-          return editCurrentResponse(callback, result, resultButtons(subject, year, qid));
-        }
-        const saved = await getRememberedQuestion("", String(chatId));
-        const oldCorrect = officialAnswer(saved?.question), oldSubject = subjectFromToken(saved?.subjectCode || saved?.subject);
-        if (!saved?.question || !oldSubject) return telegramMethod("answerCallbackQuery", { callback_query_id: callback.id, text: "Question session expired. Send /start." });
-        const result = /^[a-e]$/.test(oldCorrect) && selected === oldCorrect ? `✅ <b>Correct!</b> You chose ${selected.toUpperCase()}.` : /^[a-e]$/.test(oldCorrect) ? `❌ <b>Incorrect.</b> Official answer: <b>${oldCorrect.toUpperCase()}</b>.` : `✅ Answer recorded: <b>${selected.toUpperCase()}</b>.`;
-        return editCurrentResponse(callback, result, resultButtons(oldSubject, saved.year, saved.qid || questionIdentity(saved.question)));
-      }
-      if (data.startsWith("ask:") || data === "askhelp") return telegramMethod("sendMessage", { chat_id: chatId, text: "🤖 <b>Ask AI Tutor</b>\n\nSend:\n<code>/ask why is option B correct?</code>\n<code>/ask show me a shorter method</code>\n<code>/ask explain this like I am a beginner</code>", parse_mode: "HTML" });
-
-      const config = await loadConfig(url);
-      if (!config?.aloc) return telegramMethod("answerCallbackQuery", { callback_query_id: callback.id, text: "Bot configuration is incomplete. Reconnect it from /setup.", show_alert: true });
-      if (data.startsWith("s:")) {
-        const subject = subjectFromToken(data.slice(2));
-        if (!subject) return telegramMethod("answerCallbackQuery", { callback_query_id: callback.id, text: "Unknown subject." });
-        if (config.token && schedule(context, showYearMenuDirect(config, callback, subject, 0))) return telegramMethod("answerCallbackQuery", { callback_query_id: callback.id, text: "Loading years…", cache_time: 0 });
-        const years = await getYears(subject, config.aloc), menu = yearMenu(subject, years, 0);
-        return editCurrentResponse(callback, menu.text, menu.reply_markup);
-      }
-      if (data.startsWith("yp:")) {
-        const [, token, pageToken] = data.split(":"), subject = subjectFromToken(token);
-        if (!subject) return telegramMethod("answerCallbackQuery", { callback_query_id: callback.id, text: "Unknown subject." });
-        if (config.token && schedule(context, showYearMenuDirect(config, callback, subject, Number(pageToken || 0)))) return telegramMethod("answerCallbackQuery", { callback_query_id: callback.id, text: "Loading…", cache_time: 0 });
-        const years = await getYears(subject, config.aloc), menu = yearMenu(subject, years, Number(pageToken || 0));
-        return editCurrentResponse(callback, menu.text, menu.reply_markup);
-      }
-      if (data.startsWith("q:")) {
-        const [, token, year = "any"] = data.split(":"), subject = subjectFromToken(token);
-        if (!subject) return telegramMethod("answerCallbackQuery", { callback_query_id: callback.id, text: "Unknown subject." });
-        if (config.token && schedule(context, showQuestionDirect(config, callback, subject, year).catch(async (error) => telegram(config.token, "sendMessage", { chat_id: chatId, text: `❌ Could not fetch a question.\n\n${String(error?.message || "Unknown error")}` })))) return telegramMethod("answerCallbackQuery", { callback_query_id: callback.id, text: "Loading question…", cache_time: 0 });
-        try {
-          const pool = await getQuestionPool(subject, year, config.aloc), question = selectQuestion(pool, chatId, subject, year), qid = await rememberQuestion(chatId, subject, year, question), { text, entries } = questionHtml(question, subject);
-          return editCurrentResponse(callback, text, questionButtons(subject, year, entries, question, qid));
-        } catch (error) { return editCurrentResponse(callback, `❌ Could not fetch a question.\n\n${escapeHtml(error?.message || "Unknown error")}`, { inline_keyboard: [[{ text: "🔄 Try again", callback_data: `q:${subject.code}:${year}` }], [{ text: "📚 Subjects", callback_data: "subjects" }]] }); }
-      }
-
-      const isExplain = data.startsWith("ex:") || data === "explain", isVisual = data.startsWith("viz:") || data === "visualize", isMath = data.startsWith("math:") || data === "mathview";
-      if (isExplain || isVisual || isMath) {
-        const qid = data.includes(":") ? data.split(":")[1] : "", mode = isMath ? "math" : isVisual ? "visual" : "explain";
-        if (config.token && schedule(context, explainDirect(config, chatId, qid, mode).catch(async (error) => telegram(config.token, "sendMessage", { chat_id: chatId, text: `❌ ${String(error?.message || "Tutor request failed.")}` })))) return telegramMethod("answerCallbackQuery", { callback_query_id: callback.id, text: mode === "math" ? "Rendering maths…" : mode === "visual" ? "Creating visual…" : "Preparing explanation…", cache_time: 0 });
-        try {
-          const saved = await getRememberedQuestion(qid, String(chatId));
-          if (!saved?.question) return telegramMethod("sendMessage", { chat_id: chatId, text: "Question session expired. Send /start and open another question." });
-          if (mode === "math") {
-            let latex = extractLatex(saved.question);
-            if (!latex && aiEnabled(config)) latex = (await cachedAiTutor(saved.question, config))?.key_latex || "";
-            const image = latexImageUrl(latex);
-            return image ? telegramMethod("sendPhoto", { chat_id: chatId, photo: image, caption: "🧮 Mathematical view" }) : telegramMethod("sendMessage", { chat_id: chatId, text: "I could not identify a formula to render." });
-          }
-          const ai = await cachedAiTutor(saved.question, config);
-          if (mode === "visual") {
-            const image = aiVisualUrl(ai);
-            return image ? telegramMethod("sendPhoto", { chat_id: chatId, photo: image, caption: `🎨 Learning visual · ${ai.provider || "AI"}` }) : telegramMethod("sendMessage", { chat_id: chatId, text: "This solution does not need a useful diagram or graph. Tap 💡 Explain for the worked solution." });
-          }
-          return telegramMethod("sendMessage", { chat_id: chatId, text: explanationHtml(saved.question, ai), parse_mode: "HTML" });
-        } catch (error) { return telegramMethod("sendMessage", { chat_id: chatId, text: `❌ ${escapeHtml(error?.message || "Tutor request failed.")}`, parse_mode: "HTML" }); }
-      }
-    }
-    return Response.json({ ok: true });
-  } catch (error) {
-    console.error("telegram webhook error", error);
-    return Response.json({ ok: true });
+  const url=new URL(req.url);
+  if(req.method==="GET")return Response.json({ok:true,service:"jamb123bot",version:"exam-bank-v1",questionSource:"supabase-exam-bank",ai:["groq-qwen3.8-27b","cloudflare-gemma-4-26b"]});
+  if(req.method!=="POST")return new Response("Method Not Allowed",{status:405});
+  const secret=url.searchParams.get("secret")||"";
+  if(!secret||req.headers.get("x-telegram-bot-api-secret-token")!==secret)return new Response("Unauthorized",{status:401});
+  const cfg=await loadConfig(url); if(!cfg?.token)return new Response("Bot configuration missing",{status:503});
+  const update=await req.json().catch(()=>({}));
+  if(update.message){
+    const chatId=update.message.chat.id,text=String(update.message.text||"").trim();
+    if(text.startsWith("/ask ")){ const saved=await loadQuestion("",chatId); if(!saved?.q)return reply("sendMessage",{chat_id:chatId,text:"Open a question first with /start."}); context.waitUntil((async()=>{try{await telegram(cfg.token,"sendChatAction",{chat_id:chatId,action:"typing"});const ai=await tutor(saved.q,cfg,text.slice(5));await telegram(cfg.token,"sendMessage",{chat_id:chatId,text:explanation(saved.q,ai),parse_mode:"HTML"});}catch(e){await telegram(cfg.token,"sendMessage",{chat_id:chatId,text:`AI tutor error: ${String(e?.message||e)}`});}})()); return new Response("ok"); }
+    const list=await subjects(),menu=subjectMenu(list,0); return reply("sendMessage",{chat_id:chatId,text: text.startsWith("/start")?menu.text:"Send /start to begin JAMB practice.",parse_mode:"HTML",reply_markup:menu.reply_markup});
   }
+  if(update.callback_query){
+    const cb=update.callback_query,chatId=cb.message?.chat?.id,messageId=cb.message?.message_id,data=String(cb.data||""); if(!chatId||!messageId||data==="noop")return Response.json({ok:true});
+    if(data==="subjects"||data.startsWith("sp:")){ const p=data.startsWith("sp:")?Number(data.split(":")[1]):0,menu=subjectMenu(await subjects(),p); return reply("editMessageText",{chat_id:chatId,message_id:messageId,text:menu.text,parse_mode:"HTML",reply_markup:menu.reply_markup}); }
+    if(data.startsWith("s:")){ const id=data.slice(2),list=await subjects(),s=list.find(x=>x.id===id); if(!s)return Response.json({ok:true}); const menu=yearMenu(s,await years(s.id),0); return reply("editMessageText",{chat_id:chatId,message_id:messageId,text:menu.text,parse_mode:"HTML",reply_markup:menu.reply_markup}); }
+    if(data.startsWith("yp:")){ const [,id,p]=data.split(":"),list=await subjects(),s=list.find(x=>x.id===id); if(!s)return Response.json({ok:true}); const menu=yearMenu(s,await years(s.id),Number(p)); return reply("editMessageText",{chat_id:chatId,message_id:messageId,text:menu.text,parse_mode:"HTML",reply_markup:menu.reply_markup}); }
+    if(data.startsWith("q:")){ const [,id,year]=data.split(":"),list=await subjects(),s=list.find(x=>x.id===id); if(!s)return Response.json({ok:true}); try{const pool=await questionPool(s,year),q=pick(pool,chatId,s.id,year),idq=await saveQuestion(chatId,s,year,q);if(q.imageUrl)return reply("sendPhoto",{chat_id:chatId,photo:q.imageUrl,caption:questionHtml(q).slice(0,950),parse_mode:"HTML",reply_markup:questionButtons(q,idq,s,year)});return reply("editMessageText",{chat_id:chatId,message_id:messageId,text:questionHtml(q),parse_mode:"HTML",reply_markup:questionButtons(q,idq,s,year)});}catch(e){return reply("sendMessage",{chat_id:chatId,text:`❌ ${String(e?.message||e)}`});} }
+    if(data.startsWith("a:")){ const [,id,choice]=data.split(":"),saved=await loadQuestion(id,chatId); if(!saved?.q)return reply("sendMessage",{chat_id:chatId,text:"Question session expired. Send /start."}); const correct=String(saved.q.correctAnswer||"").toUpperCase(),ok=correct&&choice.toUpperCase()===correct; return reply("sendMessage",{chat_id:chatId,text:ok?`✅ Correct! ${choice.toUpperCase()}`:`❌ Incorrect. Correct answer: ${correct||"not set"}`,parse_mode:"HTML",reply_markup:resultButtons(id,saved.subject,saved.year)}); }
+    if(data.startsWith("e:")||data.startsWith("v:")){ const mode=data[0],id=data.slice(2),saved=await loadQuestion(id,chatId); if(!saved?.q)return reply("sendMessage",{chat_id:chatId,text:"Question session expired."}); context.waitUntil((async()=>{try{await telegram(cfg.token,"sendChatAction",{chat_id:chatId,action:"typing"});const ai=await tutor(saved.q,cfg,"Explain this JAMB question clearly. Include a useful visual only when it materially helps.");if(mode==="v"){const img=visualUrl(ai);await telegram(cfg.token,img?"sendPhoto":"sendMessage",img?{chat_id:chatId,photo:img,caption:"🎨 Learning visual"}:{chat_id:chatId,text:"This question does not need a useful diagram."});}else await telegram(cfg.token,"sendMessage",{chat_id:chatId,text:explanation(saved.q,ai),parse_mode:"HTML"});}catch(e){await telegram(cfg.token,"sendMessage",{chat_id:chatId,text:`AI tutor error: ${String(e?.message||e)}`});}})()); return new Response("ok"); }
+  }
+  return Response.json({ok:true});
 };
 
-export const config = { path: "/telegram-webhook" };
+export const config={path:"/telegram-webhook"};
