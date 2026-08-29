@@ -56,6 +56,33 @@ export default function Onboarding(){
  async function submitForm(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
   const fd=new FormData(e.currentTarget);
+  if(step==='kyc'){
+   setBusy(true);setMsg('');
+   const {data:{session}}=await supabase.auth.getSession();
+   if(!session){router.replace('/login');return;}
+   const nin=String(fd.get('nin')||'');
+   const consent=String(fd.get('consent')||'')==='yes';
+   const res=await fetch('/api/kyc/dojah',{
+    method:'POST',
+    headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},
+    body:JSON.stringify({nin,consent}),
+   });
+   const result=await res.json().catch(()=>({}));
+   if(!res.ok){setBusy(false);return setMsg(result.error||'Identity verification could not be completed.');}
+   const r=await supabase.rpc('update_application_step_v4',{p_step:'kyc',p_payload:{
+    verified:true,
+    provider:'DOJAH',
+    environment:result.environment,
+    verifiedAt:new Date().toISOString(),
+    identity:result.identity,
+   }});
+   setBusy(false);
+   if(r.error)return setMsg(friendlyError(r.error.message));
+   setMsg('NIN verified successfully with Dojah.');
+   setStep('passport');
+   await load();
+   return;
+  }
   await save(Object.fromEntries(fd.entries()));
  }
 
@@ -115,13 +142,14 @@ export default function Onboarding(){
   </>;
 
   if(step==='kyc')return <>
-   <div className="alert">Your NIN is hashed before storage; the raw number is not written into your membership application JSON.</div>
-   <label className="label">11-digit NIN<input className="field" name="nin" required inputMode="numeric" minLength={11} maxLength={11}/></label>
+   <div className="alert">Your NIN is sent securely to Dojah for verification. The raw NIN is not stored in your membership application.</div>
+   <label className="label">11-digit NIN<input className="field" name="nin" required inputMode="numeric" pattern="[0-9]{11}" minLength={11} maxLength={11} autoComplete="off"/></label>
    <label className="label">Identity consent<select className="field" name="consent" required><option value="">Select</option><option value="yes">I consent to identity verification</option></select></label>
+   <div className="muted">Sandbox test NIN: 70123456789. Live NIN checks will only be enabled after the cooperative activates Dojah production access.</div>
   </>;
 
   if(step==='passport')return <>
-   <div className="alert">Identity document upload/automated Smile ID verification can be enabled once the production KYC credentials are connected. Continue by confirming the information you supplied is accurate.</div>
+   <div className="alert">NIN verification is handled through Dojah. You may also record the identity document type supplied by the member.</div>
    <label className="label">Identity document type<select className="field" name="documentType" defaultValue={data.passport?.documentType||''}><option value="NIN_SLIP">NIN slip</option><option value="PASSPORT">International passport</option><option value="DRIVERS_LICENSE">Driver&apos;s licence</option></select></label>
    <label className="label">Document reference (optional)<input className="field" name="reference" defaultValue={data.passport?.reference}/></label>
   </>;
@@ -147,7 +175,7 @@ export default function Onboarding(){
     <p className="muted">Your application saves as you go. You can return from another device after signing in.</p>
     {msg&&<div className={msg.includes('success')||msg.startsWith('Saved')?'alert success':'alert'}>{msg}</div>}
 
-    {['personal','contact','occupation','kyc','passport','nextOfKin'].includes(step)&&<form className="formGrid" onSubmit={submitForm}><Fields/><div className="actions"><button type="button" className="btn" onClick={()=>currentIndex>0&&setStep(steps[currentIndex-1][0])}>Back</button><button className="btn primary" disabled={busy}>Save & continue</button></div></form>}
+    {['personal','contact','occupation','kyc','passport','nextOfKin'].includes(step)&&<form className="formGrid" onSubmit={submitForm}><Fields/><div className="actions"><button type="button" className="btn" onClick={()=>currentIndex>0&&setStep(steps[currentIndex-1][0])}>Back</button><button className="btn primary" disabled={busy}>{step==='kyc'?'Verify NIN & continue':'Save & continue'}</button></div></form>}
 
     {step==='registration'&&<div className="stack">
      <div className="card" style={{boxShadow:'none'}}><small className="muted">Required registration fee</small><div className="balance" style={{fontSize:32}}>₦10,000</div></div>
