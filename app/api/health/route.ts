@@ -16,8 +16,11 @@ export async function GET(){
    smile_partner:Boolean(process.env.SMILE_ID_PARTNER_ID),
    smile_api_key:Boolean(process.env.SMILE_ID_API_KEY),
    smile_environment:process.env.SMILE_ID_ENVIRONMENT==='live'?'live':process.env.SMILE_ID_ENVIRONMENT?'sandbox':'not_configured',
+   dojah_app:Boolean(process.env.DOJAH_APP_ID),
+   dojah_secret:Boolean(process.env.DOJAH_SECRET_KEY),
+   dojah_environment:process.env.DOJAH_ENVIRONMENT==='live'?'live':process.env.DOJAH_ENVIRONMENT?'sandbox':'not_configured',
    app_url:Boolean(process.env.NEXT_PUBLIC_APP_URL||process.env.NEXT_PUBLIC_SITE_URL),
   },
-  note:'This endpoint reports configuration presence only. It never returns secret values. Google OAuth provider credentials are configured inside Supabase Auth and are intentionally not exposed here.'
+  note:'This endpoint reports configuration presence only. It never returns secret values. OAuth and KYC credentials are intentionally not exposed here.'
  },{headers:{'Cache-Control':'no-store'}});
 }
