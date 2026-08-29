@@ -80,6 +80,27 @@ async function checkCloudflare(accountId, apiToken) {
   return "connected";
 }
 
+function parseAiBundle(raw) {
+  const lines = String(raw || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) return { groq: "", cfAccount: "", cfToken: "" };
+
+  let groq = lines.find((line) => line.startsWith("gsk_")) || "";
+  let cfToken = lines.find((line) => line.startsWith("cfut_")) || "";
+  let cfAccount = lines.find((line) => line !== groq && line !== cfToken) || "";
+
+  if ((!groq || !cfAccount || !cfToken) && lines.length >= 3) {
+    groq ||= lines[0] || "";
+    cfAccount ||= lines[1] || "";
+    cfToken ||= lines[2] || "";
+  }
+
+  return { groq, cfAccount, cfToken };
+}
+
 function setupForm(message = "") {
   return new Response(`<!doctype html>
 <html>
@@ -88,43 +109,35 @@ function setupForm(message = "") {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>JAMB Bot Setup</title>
 <style>
-body{font-family:system-ui,sans-serif;max-width:760px;margin:36px auto;padding:0 18px;line-height:1.5;background:#fafafa;color:#171717}
-.card{background:#fff;border:1px solid #e5e5e5;border-radius:14px;padding:22px;box-shadow:0 6px 24px rgba(0,0,0,.05)}
-input{width:100%;box-sizing:border-box;padding:12px;margin:6px 0 18px;border:1px solid #bbb;border-radius:9px;font-size:16px}
-button{padding:13px 19px;border:0;border-radius:9px;background:#111;color:#fff;font-weight:750;font-size:16px}
-code{word-break:break-all}.msg{padding:13px;border-radius:9px;background:#f2f2f2;margin-bottom:18px}.note{font-size:.92rem;color:#555}.group{border-top:1px solid #eee;margin-top:20px;padding-top:18px}
-h1{margin-top:0}h2{font-size:1.05rem;margin-bottom:4px}
+body{font-family:system-ui,sans-serif;max-width:760px;margin:28px auto;padding:0 14px;line-height:1.5;background:#fafafa;color:#171717}
+.card{background:#fff;border:1px solid #e5e5e5;border-radius:14px;padding:20px;box-shadow:0 6px 24px rgba(0,0,0,.05)}
+input,textarea{width:100%;box-sizing:border-box;padding:13px;margin:6px 0 18px;border:1px solid #bbb;border-radius:9px;font-size:16px;background:#fff}
+textarea{min-height:150px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.55}
+button{width:100%;padding:14px 19px;border:0;border-radius:9px;background:#111;color:#fff;font-weight:750;font-size:16px}
+code{word-break:break-all}.msg{padding:13px;border-radius:9px;background:#f2f2f2;margin-bottom:18px}.note{font-size:.92rem;color:#555}.paste{border:2px solid #171717;border-radius:12px;padding:16px;margin:20px 0;background:#f8f8f8}.order{font-size:.9rem;background:#fff;padding:10px 12px;border-radius:8px;border:1px solid #ddd}h1{margin-top:0;font-size:1.55rem}h2{font-size:1.05rem;margin:0 0 4px}
 </style>
 </head>
 <body><div class="card">
 <h1>JAMB Telegram Bot Setup</h1>
 ${message ? `<div class="msg">${message}</div>` : ""}
-<p>Connect ALOC and the two free AI providers. Groq is primary for speed; Cloudflare Workers AI is the automatic fallback.</p>
+<p>Enter your Telegram and ALOC credentials, then paste all three AI credentials from your clipboard into one box.</p>
 <form method="post" action="/setup">
 <label>Telegram Bot Token</label>
-<input name="token" type="password" required autocomplete="off" placeholder="123456:AA...">
+<input name="token" type="password" required autocomplete="off" placeholder="Paste Telegram bot token">
 
 <label>ALOC API Key</label>
-<input name="aloc" type="password" required autocomplete="off" placeholder="ALOC API key">
+<input name="aloc" type="password" required autocomplete="off" placeholder="Paste ALOC API key">
 
-<div class="group">
-<h2>Groq Free — primary AI</h2>
-<p class="note">Model: Qwen3.8-27B. Very fast and supports text, mathematics and images/diagrams.</p>
-<label>Groq API Key</label>
-<input name="groq" type="password" autocomplete="off" placeholder="gsk_...">
+<div class="paste">
+<h2>📋 Paste all 3 AI credentials here</h2>
+<p class="note">Long-press the box on your phone and tap <b>Paste</b>. Paste the three lines together exactly as they are in your clipboard.</p>
+<div class="order">Line 1: Groq API key<br>Line 2: Cloudflare Account ID<br>Line 3: Cloudflare Workers AI API token</div>
+<textarea name="ai_bundle" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste all three lines here"></textarea>
+<p class="note">The server automatically identifies the Groq key and Cloudflare token by their prefixes, so extra spaces or line breaks are okay.</p>
 </div>
 
-<div class="group">
-<h2>Cloudflare Workers AI — free fallback</h2>
-<p class="note">Model: Gemma 4 26B. Used automatically if Groq is unavailable or rate-limited.</p>
-<label>Cloudflare Account ID</label>
-<input name="cf_account" type="text" autocomplete="off" placeholder="Cloudflare Account ID">
-<label>Cloudflare Workers AI API Token</label>
-<input name="cf_token" type="password" autocomplete="off" placeholder="Cloudflare API token">
-</div>
-
-<p class="note">The credentials are stored server-side in the bot's Netlify configuration store. They are no longer placed directly in the Telegram webhook URL.</p>
 <button type="submit">Connect / Update Bot</button>
+<p class="note">Credentials are submitted by POST and stored server-side. They are not written into GitHub source code.</p>
 </form>
 </div></body></html>`, { headers: { "content-type": "text/html; charset=utf-8" } });
 }
@@ -136,13 +149,11 @@ export default async (req) => {
   const form = await req.formData();
   const token = String(form.get("token") || "").trim();
   const aloc = String(form.get("aloc") || "").trim();
-  const groq = String(form.get("groq") || "").trim();
-  const cfAccount = String(form.get("cf_account") || "").trim();
-  const cfToken = String(form.get("cf_token") || "").trim();
+  const { groq, cfAccount, cfToken } = parseAiBundle(form.get("ai_bundle"));
 
   if (!token || !aloc) return setupForm("Telegram token and ALOC key are required.");
-  if ((cfAccount && !cfToken) || (!cfAccount && cfToken)) {
-    return setupForm("For Cloudflare fallback, enter both the Account ID and the Workers AI API token.");
+  if (!groq || !cfAccount || !cfToken) {
+    return setupForm("Paste all three AI credentials into the large box: Groq key, Cloudflare Account ID, and Cloudflare Workers AI token.");
   }
 
   try {
@@ -154,8 +165,8 @@ export default async (req) => {
     await checkAloc(aloc);
 
     const checks = await Promise.allSettled([
-      groq ? checkGroq(groq) : Promise.resolve("not configured"),
-      cfAccount && cfToken ? checkCloudflare(cfAccount, cfToken) : Promise.resolve("not configured"),
+      checkGroq(groq),
+      checkCloudflare(cfAccount, cfToken),
     ]);
 
     await configStore().setJSON(`cfg:${configId}`, {
