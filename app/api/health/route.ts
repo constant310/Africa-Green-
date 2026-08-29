@@ -10,7 +10,7 @@ export async function GET(){
    supabase_public:Boolean(process.env.NEXT_PUBLIC_V4_SUPABASE_URL&&process.env.NEXT_PUBLIC_V4_SUPABASE_PUBLISHABLE_KEY),
    supabase_server:Boolean(process.env.V4_SUPABASE_SERVICE_ROLE_KEY),
    paystack_public:Boolean(process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY),
-   paystack_server:Boolean(process.env.V4_PAYSTACK_SECRET_KEY),
+   paystack_server:Boolean(process.env.V4_PAYSTACK_SECRET_KEY||process.env.PAYSTACK_SECRET_KEY),
    resend:Boolean(process.env.V4_RESEND_API_KEY),
    app_url:Boolean(process.env.NEXT_PUBLIC_APP_URL),
   },
