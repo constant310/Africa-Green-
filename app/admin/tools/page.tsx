@@ -5,6 +5,7 @@ export default function AdminTools(){
   {href:'/admin/create-member',title:'Create member',body:'Super Admin direct member invitation and activation with a mandatory audit reason.'},
   {href:'/admin/reports',title:'Financial reports',body:'Live read-only totals for wallet liabilities, savings, shares, loans, security, fees and withdrawals.'},
   {href:'/admin/readiness',title:'Production readiness',body:'Check whether Google OAuth, Paystack, Resend, Smile ID, Supabase and app URL configuration is present.'},
+  {href:'/admin/email-test',title:'Send test email',body:'Send a protected Resend delivery test from the live production app and confirm the returned message ID.'},
   {href:'/activity',title:'Member activity view',body:'Open the member-facing activity log to verify transparent account history.'},
   {href:'/loan-calculator',title:'Loan calculator',body:'Test the reducing-balance repayment calculator using the current cooperative policy.'},
  ];
