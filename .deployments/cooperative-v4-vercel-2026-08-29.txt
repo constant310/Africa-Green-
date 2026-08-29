@@ -1,0 +1,2 @@
+Trigger production deployment of the latest Cooperative V4 build on Vercel.
+Date: 2026-08-29
