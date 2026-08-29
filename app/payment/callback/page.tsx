@@ -1,0 +1,3 @@
+'use client';
+import Link from 'next/link';import {useSearchParams} from 'next/navigation';
+export default function PaymentCallback(){const p=useSearchParams();const ref=p.get('reference')||p.get('trxref');return <main id="main" className="authSolo"><section className="authCard center"><span className="successIcon">✓</span><p className="eyebrow">PAYMENT RETURN</p><h1>Payment received for verification</h1><p className="muted">Your wallet is credited only after the server confirms the Paystack transaction. If confirmation is still processing, refresh your portal shortly.</p>{ref&&<div className="referenceBox"><small>Reference</small><b>{ref}</b></div>}<Link className="btn primary wide inlineButton" href="/portal">Return to portal</Link></section></main>}
