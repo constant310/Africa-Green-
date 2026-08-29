@@ -1,0 +1,53 @@
+{
+  "checked_on": "2026-08-29",
+  "sources": [
+    {
+      "exam_body": "WAEC",
+      "url": "https://waeconline.org.ng/e-learning/",
+      "access": "public",
+      "rights": "all_rights_reserved",
+      "safe_ingest": "metadata_and_links_only",
+      "notes": "Official e-learning archive exposes subjects and historical paper/question navigation; full content is not mirrored without reuse rights."
+    },
+    {
+      "exam_body": "JAMB",
+      "url": "https://www.jamb.gov.ng/",
+      "access": "public",
+      "rights": "all_rights_reserved",
+      "safe_ingest": "syllabus_brochure_metadata_and_links",
+      "notes": "Use the public official site for syllabus, brochure and catalogue metadata."
+    },
+    {
+      "exam_body": "JAMB",
+      "url": "https://learn.jamb.gov.ng/",
+      "access": "login_required",
+      "rights": "all_rights_reserved",
+      "safe_ingest": "blocked",
+      "notes": "Do not scrape login-protected learning content."
+    },
+    {
+      "exam_body": "NECO",
+      "url": "https://neco.gov.ng/",
+      "access": "public",
+      "rights": "all_rights_reserved",
+      "safe_ingest": "public_metadata_and_links",
+      "notes": "Use public official documents for exam/subject metadata."
+    },
+    {
+      "exam_body": "NECO",
+      "url": "https://practice-exam.neco.gov.ng/",
+      "access": "registration_or_login_required",
+      "rights": "all_rights_reserved",
+      "safe_ingest": "blocked",
+      "notes": "Do not scrape gated practice content."
+    },
+    {
+      "exam_body": "POST-UTME",
+      "url": "institution-specific",
+      "access": "varies",
+      "rights": "varies",
+      "safe_ingest": "evaluate_per_institution",
+      "notes": "Post-UTME is institution-specific. Record the university and its official admissions/source URL for every paper."
+    }
+  ]
+}
