@@ -1,0 +1,11 @@
+Production finish batch 2026-08-29
+
+Includes:
+- member notification center backed by audit events and platform notifications
+- admin audit CSV export UI
+- financial snapshot CSV export
+- Dojah-aware production readiness dashboard
+- member statements and receipt center
+- idempotent Paystack transactional emails matching registration-fee-only policy
+- removal of temporary Dojah sandbox self-test endpoint
+- member activity navigation to notifications and documents
