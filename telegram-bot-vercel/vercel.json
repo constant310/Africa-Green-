@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/setup", "destination": "/api/setup" },
+    { "source": "/telegram-webhook", "destination": "/api/telegram-webhook" },
+    { "source": "/health", "destination": "/api/health" }
+  ],
+  "functions": {
+    "api/telegram-webhook.js": { "maxDuration": 60 },
+    "api/setup.js": { "maxDuration": 30 }
+  }
+}
