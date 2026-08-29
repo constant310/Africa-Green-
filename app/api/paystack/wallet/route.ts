@@ -1,8 +1,8 @@
 import {NextRequest,NextResponse} from 'next/server';
 import crypto from 'node:crypto';
 
-const supabaseUrl=process.env.NEXT_PUBLIC_V4_SUPABASE_URL||'';
-const publishable=process.env.NEXT_PUBLIC_V4_SUPABASE_PUBLISHABLE_KEY||'';
+const supabaseUrl=process.env.NEXT_PUBLIC_V4_SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL||'https://ynlmhpwytpegleafdpwb.supabase.co';
+const publishable=process.env.NEXT_PUBLIC_V4_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||'sb_publishable_B6dHJGvHPWrJfO-jsEHdog_cSaaL0VP';
 
 export async function POST(req:NextRequest){
  try{
@@ -18,7 +18,7 @@ export async function POST(req:NextRequest){
   if(!u.ok||!user.id)return NextResponse.json({error:'Your session has expired. Please log in again.'},{status:401});
   const reference=`AOD-WALLET-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
   const amount=Math.round(naira*100);
-  const appUrl=(process.env.NEXT_PUBLIC_APP_URL||req.nextUrl.origin).replace(/\/$/,'');
+  const appUrl=(process.env.NEXT_PUBLIC_APP_URL||process.env.NEXT_PUBLIC_SITE_URL||req.nextUrl.origin).replace(/\/$/,'');
   const callbackUrl=`${appUrl}/portal?wallet_sync=1&reference=${encodeURIComponent(reference)}`;
   const p=await fetch('https://api.paystack.co/transaction/initialize',{
    method:'POST',
