@@ -1,0 +1,28 @@
+name: Exam Bank CI
+
+on:
+  push:
+    branches: [ exam-bank ]
+    paths:
+      - 'exam-bank/**'
+      - '.github/workflows/exam-bank-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Python tools
+        run: python -m py_compile exam-bank/scripts/import_licensed_questions.py exam-bank/scripts/index_official_sources.py
+      - name: Validate source registry JSON
+        run: python -m json.tool exam-bank/official_sources.json >/dev/null
+      - name: Verify migrations and template exist
+        run: |
+          test -s exam-bank/migrations/001_exam_bank_schema.sql
+          test -s exam-bank/migrations/002_post_utme_and_passages.sql
+          test -s exam-bank/templates/licensed_questions_template.csv
