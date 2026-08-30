@@ -10,10 +10,10 @@ export default function EmailTest(){
  const[busy,setBusy]=useState(true);
  const[msg,setMsg]=useState('');
  const[ok,setOk]=useState(false);
- useEffect(()=>{void (async()=>{const {data:{session}}=await supabase.auth.getSession();if(!session){router.replace('/login');return}setBusy(false)})()},[]);
+ useEffect(()=>{void (async()=>{const {data:{session}}=await supabase.auth.getSession();if(!session){router.replace('/login?next=%2Fadmin%2Femail-test');return}setBusy(false)})()},[router]);
  async function submit(e:FormEvent<HTMLFormElement>){
   e.preventDefault();setBusy(true);setMsg('');setOk(false);
-  const f=new FormData(e.currentTarget);const {data:{session}}=await supabase.auth.getSession();if(!session){router.replace('/login');return}
+  const f=new FormData(e.currentTarget);const {data:{session}}=await supabase.auth.getSession();if(!session){router.replace('/login?next=%2Fadmin%2Femail-test');return}
   const res=await fetch('/api/admin/test-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({to:f.get('to')})});
   const body=await res.json().catch(()=>({}));setBusy(false);if(!res.ok){setMsg(body.error||'Email test failed.');return}setOk(true);setMsg(`Email accepted by Resend${body.id?` · Message ID: ${body.id}`:''}`);
  }
