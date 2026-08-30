@@ -6,8 +6,9 @@ const publishable=process.env.NEXT_PUBLIC_V4_SUPABASE_PUBLISHABLE_KEY||process.e
 const serviceRole=process.env.V4_SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_SERVICE_ROLE_KEY||'';
 
 async function currentRoles(token:string){
- if(!publishable)return [] as string[];
- const r=await fetch(`${supabaseUrl}/rest/v1/rpc/admin_current_roles_v4`,{method:'POST',headers:{apikey:publishable,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:'{}',cache:'no-store'});
+ const apiKey=publishable||serviceRole;
+ if(!apiKey)return [] as string[];
+ const r=await fetch(`${supabaseUrl}/rest/v1/rpc/admin_current_roles_v4`,{method:'POST',headers:{apikey:apiKey,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:'{}',cache:'no-store'});
  if(!r.ok)return [] as string[];
  const data=await r.json().catch(()=>[]);
  return Array.isArray(data)?data.map(String):[];
