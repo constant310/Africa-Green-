@@ -5,6 +5,8 @@ import {useEffect,useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {friendlyError,supabase} from '../../../lib/supabase';
 
+function safeNext(value:string|null){return value&&value.startsWith('/')&&!value.startsWith('//')?value:null}
+
 export default function AuthCallback(){
  const router=useRouter();
  const[msg,setMsg]=useState('Completing secure sign-in…');
@@ -13,6 +15,7 @@ export default function AuthCallback(){
  useEffect(()=>{
   void (async()=>{
    const params=new URLSearchParams(window.location.search);
+   const next=safeNext(params.get('next'));
    const oauthError=params.get('error_description')||params.get('error');
    if(oauthError){setFailed(true);setMsg(friendlyError(oauthError));return;}
 
@@ -33,6 +36,7 @@ export default function AuthCallback(){
     updated_at:new Date().toISOString(),
    }).eq('id',user.id);
 
+   if(next){router.replace(next);return;}
    const {data:profile}=await supabase.from('profiles').select('membership_status,application_role').eq('id',user.id).maybeSingle();
    if(profile?.application_role==='ADMIN'||profile?.application_role==='SUPER_ADMIN')router.replace('/admin');
    else if(profile?.membership_status==='ACTIVE')router.replace('/portal');
