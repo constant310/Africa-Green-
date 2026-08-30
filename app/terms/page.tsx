@@ -1,0 +1,14 @@
+import Link from 'next/link';
+
+export default function TermsPage(){
+ return <main className="pageShell"><section className="card" style={{maxWidth:900,margin:'40px auto'}}><p className="eyebrow">Platform terms</p><h1>Membership and platform terms</h1><p className="muted">These terms govern use of the digital cooperative platform. The Society's registered bye-laws, approved policies and lawful resolutions remain controlling where they apply.</p><div className="formGrid">
+ <div><h2>Account and membership</h2><p>Creating an account does not by itself activate cooperative membership. A member must complete the required registration process, accept applicable bye-laws and policies, complete required identity checks, pay the verified registration fee and receive the required membership approvals.</p></div>
+ <div><h2>Registration</h2><p>The current onboarding requirement is the approved registration fee. Share capital, savings and Property Thrift contributions may be funded after activation in accordance with the Society's current policies.</p></div>
+ <div><h2>Payments and wallet</h2><p>Payment status is determined by verified provider confirmation and the cooperative ledger, not by screenshots or unverified claims. Duplicate provider callbacks must not create duplicate wallet credits.</p></div>
+ <div><h2>Withdrawals and transfers</h2><p>Withdrawals are subject to active membership, available balance, beneficiary checks, transaction PIN verification, approval rules, transaction limits and provider availability. Applicable transfer charges are shown before completion where supported.</p></div>
+ <div><h2>Loans</h2><p>Loan availability is subject to the active loan policy, eligibility period, security requirements, guarantor rules, approval workflow and repayment terms applicable at the time of application.</p></div>
+ <div><h2>Prohibited activity</h2><p>Members must not attempt to bypass access controls, impersonate another person, falsify payment or KYC information, manipulate balances, abuse referral or loan systems, or interfere with the platform.</p></div>
+ <div><h2>Audit and records</h2><p>Administrative, financial and security-relevant actions may be recorded in audit logs for accountability, dispute resolution and fraud prevention.</p></div>
+ <div><h2>Policy changes</h2><p>Fees, limits and product rules may change only through the Society's authorized governance process. Material changes should be communicated to members through the platform or other approved channels.</p></div>
+ </div><p className="muted" style={{marginTop:24}}>These platform terms are not a replacement for the registered bye-laws. Where there is a conflict, the governing legal documents and valid cooperative resolutions take precedence.</p><div className="actions"><Link className="btn" href="/privacy">Privacy notice</Link><Link className="btn primary" href="/">Back home</Link></div></section></main>;
+}
