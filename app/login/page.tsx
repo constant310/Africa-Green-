@@ -1,14 +1,16 @@
 'use client';
 import Link from 'next/link';
-import {FormEvent,useMemo,useState} from 'react';
-import {useRouter,useSearchParams} from 'next/navigation';
+import {FormEvent,useEffect,useState} from 'react';
+import {useRouter} from 'next/navigation';
 import {friendlyError,supabase} from '../../lib/supabase';
 
 function safeNext(value:string|null){return value&&value.startsWith('/')&&!value.startsWith('//')?value:null}
 
 export default function Login(){
- const router=useRouter(); const params=useSearchParams(); const next=useMemo(()=>safeNext(params.get('next')),[params]);
+ const router=useRouter();
+ const[next,setNext]=useState<string|null>(null);
  const[email,setEmail]=useState(''); const[password,setPassword]=useState(''); const[busy,setBusy]=useState(false); const[msg,setMsg]=useState('');
+ useEffect(()=>{setNext(safeNext(new URLSearchParams(window.location.search).get('next')))},[]);
  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setMsg('');const {error}=await supabase.auth.signInWithPassword({email,password});setBusy(false);if(error)return setMsg(friendlyError(error.message));router.replace(next||'/portal');}
  async function google(){
   setBusy(true);setMsg('');
