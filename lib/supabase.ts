@@ -1,9 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const url = process.env.NEXT_PUBLIC_V4_SUPABASE_URL || 'https://ynlmhpwytpegleafdpwb.supabase.co';
 const key = process.env.NEXT_PUBLIC_V4_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_B6dHJGvHPWrJfO-jsEHdog_cSaaL0VP';
 
-export const supabase = createClient(url, key, {
+export const supabase = createBrowserClient(url, key, {
   auth: {
     persistSession: true,
     detectSessionInUrl: true,
