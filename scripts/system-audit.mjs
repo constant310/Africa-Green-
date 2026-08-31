@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root=process.cwd();
 const required=[
- 'app/page.tsx','app/login/page.tsx','app/register/page.tsx','app/onboarding/page.tsx','app/portal/page.tsx',
+ 'app/page.tsx','app/login/page.tsx','app/register/page.tsx','app/forgot-password/page.tsx','app/reset-password/page.tsx','app/onboarding/page.tsx','app/portal/page.tsx',
  'app/loans/page.tsx','app/withdrawals/page.tsx','app/activity/page.tsx','app/notifications/page.tsx','app/documents/page.tsx',
  'app/admin/page.tsx','app/admin/create-member/page.tsx','app/admin/withdrawals/page.tsx','app/admin/support/page.tsx',
  'app/admin/readiness/page.tsx','app/admin/reports/page.tsx','app/admin/audit-export/page.tsx','app/admin/tools/page.tsx',
@@ -50,4 +50,4 @@ for(const marker of ['SYSTEM_ACTIVE_MEMBER_CONSISTENCY_BACKFILL','ensure_member_
  if(!backfill.includes(marker))throw new Error(`Active member consistency migration is missing ${marker}`);
 }
 
-console.log(`V4 system audit passed: ${required.length} required files, secret-surface checks, governance hardening, and active-member consistency verified.`);
+console.log(`V4 system audit passed: ${required.length} required files, secret-surface checks, governance hardening, account recovery, and active-member consistency verified.`);
