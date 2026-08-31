@@ -8,16 +8,9 @@ import {friendlyError,supabase} from '../../lib/supabase';
 type Any=Record<string,any>;
 const money=(k:any)=>`₦${(Number(k||0)/100).toLocaleString('en-NG',{maximumFractionDigits:2})}`;
 const pct=(n:number,d:number)=>d?Math.min(100,Math.round((n/d)*100)):0;
-
-function Status({v}:{v:any}){
- return <span className="status">{String(v||'pending').replaceAll('_',' ')}</span>;
-}
-function Card({title,children}:{title:string,children:ReactNode}){
- return <section className="card"><div className="cardHeader"><h3>{title}</h3></div>{children}</section>;
-}
-function Empty({text='Nothing to show yet.'}:{text?:string}){
- return <div className="empty">{text}</div>;
-}
+function Status({v}:{v:any}){return <span className="status">{String(v||'pending').replaceAll('_',' ')}</span>}
+function Card({title,children}:{title:string,children:ReactNode}){return <section className="card"><div className="cardHeader"><h3>{title}</h3></div>{children}</section>}
+function Empty({text='Nothing to show yet.'}:{text?:string}){return <div className="empty">{text}</div>}
 
 export default function Portal(){
  const router=useRouter();
@@ -28,152 +21,45 @@ export default function Portal(){
  const[msg,setMsg]=useState('');
  const[amount,setAmount]=useState('');
  const[pin,setPin]=useState('');
- const[loanAmount,setLoanAmount]=useState('');
- const[tenure,setTenure]=useState('6');
  const[ticket,setTicket]=useState({subject:'',category:'GENERAL',message:''});
+ const profile:Any=snap?.profile??{};const balances:Any=snap?.balances??{};const roles:any[]=snap?.roles??[];
+ const plans:any[]=snap?.savings_plans??[];const enrollments:any[]=snap?.savings_enrollments??[];const loans:any[]=snap?.loans??[];
+ const guarantees:any[]=snap?.guarantees??[];const withdrawals:any[]=snap?.withdrawals??[];const transactions:any[]=snap?.transactions??[];
+ const announcements:any[]=snap?.announcements??[];const beneficiaries:any[]=snap?.beneficiaries??[];const supportTickets:any[]=snap?.support_tickets??[];const referrals:any[]=snap?.referrals??[];
+ const isAdmin=roles.includes('ADMIN')||roles.includes('SUPER_ADMIN');const active=profile.membership_status==='ACTIVE';
+ const nav=useMemo(()=>[['overview','Overview'],['wallet','Wallet'],['savings','Savings & thrift'],['shares','Share capital'],['loans','Loans & guarantees'],['withdrawals','Withdrawals'],['transactions','Transactions'],['support','Support & referrals'],['security','Security & alerts']],[]);
 
- const profile:Any=snap?.profile??{};
- const balances:Any=snap?.balances??{};
- const roles:any[]=snap?.roles??[];
- const plans:any[]=snap?.savings_plans??[];
- const enrollments:any[]=snap?.savings_enrollments??[];
- const loans:any[]=snap?.loans??[];
- const guarantees:any[]=snap?.guarantees??[];
- const withdrawals:any[]=snap?.withdrawals??[];
- const transactions:any[]=snap?.transactions??[];
- const announcements:any[]=snap?.announcements??[];
- const beneficiaries:any[]=snap?.beneficiaries??[];
- const supportTickets:any[]=snap?.support_tickets??[];
- const referrals:any[]=snap?.referrals??[];
- const isAdmin=roles.includes('ADMIN')||roles.includes('SUPER_ADMIN');
- const active=profile.membership_status==='ACTIVE';
-
- const nav=useMemo(()=>[
-  ['overview','Overview'],['wallet','Wallet'],['savings','Savings & thrift'],['shares','Share capital'],
-  ['loans','Loans & guarantees'],['withdrawals','Withdrawals'],['transactions','Transactions'],
-  ['support','Support & referrals'],['security','Security & alerts'],
- ],[]);
-
- async function load(){
-  setBusy(true);setMsg('');
-  const {data:{session}}=await supabase.auth.getSession();
-  if(!session){router.replace('/login');return;}
-  const r=await supabase.rpc('member_portal_snapshot_v4');
-  setBusy(false);
-  if(r.error){setMsg(friendlyError(r.error.message));return;}
-  setSnap(r.data);
- }
+ async function load(){setBusy(true);setMsg('');const {data:{session}}=await supabase.auth.getSession();if(!session){router.replace('/login');return;}const r=await supabase.rpc('member_portal_snapshot_v4');setBusy(false);if(r.error){setMsg(friendlyError(r.error.message));return;}setSnap(r.data)}
  useEffect(()=>{void load()},[]);
+ async function rpc(name:string,args:Any={}){setBusy(true);setMsg('');const r=await supabase.rpc(name,args);setBusy(false);if(r.error){setMsg(friendlyError(r.error.message));return null;}setMsg('Action completed successfully.');await load();return r.data}
+ async function logout(){await supabase.auth.signOut();router.replace('/login')}
+ function enrollmentFor(planId:string){return enrollments.find((e:any)=>e.plan_id===planId)}
+ async function fundWallet(){const naira=Number(amount);if(!Number.isFinite(naira)||naira<100){setMsg('Enter a wallet funding amount of at least ₦100.');return;}const {data:{session}}=await supabase.auth.getSession();if(!session){router.replace('/login');return;}setBusy(true);setMsg('');const res=await fetch('/api/paystack/wallet',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({amount_naira:naira,email:session.user.email,callback_url:window.location.href})});const body=await res.json();setBusy(false);if(!res.ok){setMsg(body.error||'Unable to initialize payment.');return;}window.location.href=body.authorization_url}
 
- async function rpc(name:string,args:Any={}){
-  setBusy(true);setMsg('');
-  const r=await supabase.rpc(name,args);
-  setBusy(false);
-  if(r.error){setMsg(friendlyError(r.error.message));return null;}
-  setMsg('Action completed successfully.');
-  await load();
-  return r.data;
- }
- async function logout(){await supabase.auth.signOut();router.replace('/login');}
- function enrollmentFor(planId:string){return enrollments.find((e:any)=>e.plan_id===planId);}
-
- async function fundWallet(){
-  const naira=Number(amount);
-  if(!Number.isFinite(naira)||naira<100){setMsg('Enter a wallet funding amount of at least ₦100.');return;}
-  const {data:{session}}=await supabase.auth.getSession();
-  if(!session){router.replace('/login');return;}
-  setBusy(true);setMsg('');
-  const res=await fetch('/api/paystack/wallet',{
-   method:'POST',
-   headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},
-   body:JSON.stringify({amount_naira:naira,email:session.user.email,callback_url:window.location.href}),
-  });
-  const body=await res.json();setBusy(false);
-  if(!res.ok){setMsg(body.error||'Unable to initialize payment.');return;}
-  window.location.href=body.authorization_url;
- }
-
- return <div className="appShell">
-  {busy&&<div className="loadingBar"/>}
-  <aside className={`sidebar ${menu?'open':''}`}>
-   <Link href="/" className="brand"><span className="brandMark">AD</span><span>Acres of Diamond<small>Member platform</small></span></Link>
-   <nav className="sidebarNav">
-    {nav.map(([k,l])=><button key={k} className={`navButton ${view===k?'active':''}`} onClick={()=>{setView(k);setMenu(false)}}>{l}</button>)}
-    {isAdmin&&<Link className="navButton" href="/admin">Administration</Link>}
-   </nav>
-   <div className="sidebarBottom"><button className="navButton" onClick={()=>void load()}>Refresh data</button><button className="navButton" onClick={()=>void logout()}>Sign out</button></div>
-  </aside>
+ return <div className="appShell">{busy&&<div className="loadingBar"/>}
+  <aside className={`sidebar ${menu?'open':''}`}><Link href="/" className="brand"><span className="brandMark">AD</span><span>Acres of Diamond<small>Member platform</small></span></Link><nav className="sidebarNav">{nav.map(([k,l])=><button key={k} className={`navButton ${view===k?'active':''}`} onClick={()=>{setView(k);setMenu(false)}}>{l}</button>)}<Link className="navButton" href="/documents">Statements & receipts</Link><Link className="navButton" href="/activity">Account activity</Link><Link className="navButton" href="/notifications">Notifications</Link>{isAdmin&&<Link className="navButton" href="/admin">Administration</Link>}</nav><div className="sidebarBottom"><button className="navButton" onClick={()=>void load()}>Refresh data</button><button className="navButton" onClick={()=>void logout()}>Sign out</button></div></aside>
   {menu&&<button className="scrim" aria-label="Close menu" onClick={()=>setMenu(false)}/>} 
+  <div className="workspace"><header className="topbar"><div style={{display:'flex',gap:12,alignItems:'center'}}><button className="menuBtn" onClick={()=>setMenu(v=>!v)}>☰</button><div><p className="eyebrow" style={{margin:0}}>Member platform</p><h1>{nav.find(x=>x[0]===view)?.[1]||'Portal'}</h1></div></div><div className="userChip"><b>{profile.first_name||profile.email||'Member'}</b><small>{profile.member_number||String(profile.membership_status||'Applicant').replaceAll('_',' ')}</small></div></header>
+   <main className="appPage">{msg&&<div className={msg.toLowerCase().includes('success')?'alert success':'alert'} style={{marginBottom:16}}>{msg}</div>}{!active&&<div className="alert" style={{marginBottom:16}}>Your account is currently <b>{String(profile.membership_status||'applicant').replaceAll('_',' ')}</b>. Some financial features unlock after activation. <Link href="/onboarding" style={{color:'var(--green)',fontWeight:850}}>Continue onboarding →</Link></div>}
 
-  <div className="workspace">
-   <header className="topbar">
-    <div style={{display:'flex',gap:12,alignItems:'center'}}><button className="menuBtn" onClick={()=>setMenu(v=>!v)}>☰</button><div><p className="eyebrow" style={{margin:0}}>Member platform</p><h1>{nav.find(x=>x[0]===view)?.[1]||'Portal'}</h1></div></div>
-    <div className="userChip"><b>{profile.first_name||profile.email||'Member'}</b><small>{profile.member_number||String(profile.membership_status||'Applicant').replaceAll('_',' ')}</small></div>
-   </header>
+    {view==='overview'&&<div className="stack"><section className="welcome"><div><p className="eyebrow" style={{color:'#a8e4c5'}}>Your cooperative account</p><h2>Welcome, {profile.first_name||'member'}.</h2><p>Keep your savings, ownership, credit and cooperative records clear.</p></div><Status v={profile.membership_status}/></section><div className="metrics"><div className="card metric"><small>Available wallet</small><strong>{money(balances.wallet_available_kobo)}</strong></div><div className="card metric"><small>Total savings</small><strong>{money(balances.savings_kobo)}</strong></div><div className="card metric"><small>Share capital</small><strong>{money(balances.share_capital_kobo)}</strong></div><div className="card metric"><small>Loan balance</small><strong>{money(balances.loan_receivable_kobo)}</strong></div></div><div className="grid2"><Card title="Property Thrift progress">{(()=>{const plan=plans.find((x:any)=>x.code==='PROPERTY_THRIFT');if(!plan)return <Empty/>;const e=enrollmentFor(plan.id);const done=Number(e?.contributed_kobo||0);const target=Number(plan.target_amount_kobo||0);return <><div className="balance" style={{fontSize:36}}>{money(done)}</div><p className="muted">of {money(target)} target · {e?.installment_count_paid||0} of {plan.installment_count} installments</p><div className="progress"><span style={{width:`${pct(done,target)}%`}}/></div><div className="actions"><button className="btn primary" onClick={()=>setView('savings')}>{e?'Make contribution':'Enroll now'}</button></div></>})()}</Card><Card title="Recent activity">{transactions.slice(0,6).map((t:any)=><div className="list" key={t.id}><div><b>{t.description||t.source}</b><small>{t.reference}</small></div><strong>{money(t.amount_kobo)}</strong></div>)}{!transactions.length&&<Empty/>}<div className="actions" style={{marginTop:12}}><Link className="btn" href="/documents">Statements & receipts</Link></div></Card></div>{!!announcements.length&&<Card title="Cooperative announcements">{announcements.map((a:any)=><div className="list" key={a.id}><div><b>{a.title}</b><small>{a.body}</small></div></div>)}</Card>}</div>}
 
-   <main className="appPage">
-    {msg&&<div className={msg.includes('success')?'alert success':'alert'} style={{marginBottom:16}}>{msg}</div>}
-    {!active&&<div className="alert" style={{marginBottom:16}}>Your account is currently <b>{String(profile.membership_status||'applicant').replaceAll('_',' ')}</b>. Some financial features unlock after activation. <Link href="/onboarding" style={{color:'var(--green)',fontWeight:850}}>Continue onboarding →</Link></div>}
+    {view==='wallet'&&<div className="grid2"><Card title="Available wallet"><div className="balance">{money(balances.wallet_available_kobo)}</div><p className="muted">Wallet funding does not ask for a PIN. Your transaction PIN is requested only when money leaves the available wallet.</p><label className="label">Amount to fund (₦)<input className="field" value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal"/></label><div className="actions"><button className="btn primary" disabled={busy} onClick={()=>void fundWallet()}>Fund with Paystack</button></div></Card><Card title="Your dedicated account">{snap?.virtual_account?.account_number?<><div className="balance" style={{fontSize:36}}>{snap.virtual_account.account_number}</div><p><b>{snap.virtual_account.bank_name}</b><br/>{snap.virtual_account.account_name}</p><p className="muted">Transfers to this account are reconciled after provider confirmation.</p></>:<Empty text="A dedicated virtual account has not been assigned yet. Paystack funding remains available."/>}</Card></div>}
 
-    {view==='overview'&&<div className="stack">
-     <section className="welcome"><div><p className="eyebrow" style={{color:'#a8e4c5'}}>Your cooperative account</p><h2>Welcome, {profile.first_name||'member'}.</h2><p>Keep your savings, ownership, credit and cooperative records clear.</p></div><Status v={profile.membership_status}/></section>
-     <div className="metrics">
-      <div className="card metric"><small>Available wallet</small><strong>{money(balances.wallet_available_kobo)}</strong></div>
-      <div className="card metric"><small>Total savings</small><strong>{money(balances.savings_kobo)}</strong></div>
-      <div className="card metric"><small>Share capital</small><strong>{money(balances.share_capital_kobo)}</strong></div>
-      <div className="card metric"><small>Loan balance</small><strong>{money(balances.loan_receivable_kobo)}</strong></div>
-     </div>
-     <div className="grid2">
-      <Card title="Property Thrift progress">{(()=>{const plan=plans.find((x:any)=>x.code==='PROPERTY_THRIFT');if(!plan)return <Empty/>;const e=enrollmentFor(plan.id);const done=Number(e?.contributed_kobo||0);const target=Number(plan.target_amount_kobo||0);return <><div className="balance" style={{fontSize:36}}>{money(done)}</div><p className="muted">of {money(target)} target · {e?.installment_count_paid||0} of {plan.installment_count} installments</p><div className="progress"><span style={{width:`${pct(done,target)}%`}}/></div><div className="actions"><button className="btn primary" onClick={()=>setView('savings')}>{e?'Make contribution':'Enroll now'}</button></div></>})()}</Card>
-      <Card title="Recent activity">{transactions.slice(0,6).map((t:any)=><div className="list" key={t.id}><div><b>{t.description||t.source}</b><small>{t.reference}</small></div><strong>{money(t.amount_kobo)}</strong></div>)}{!transactions.length&&<Empty/>}</Card>
-     </div>
-     {!!announcements.length&&<Card title="Cooperative announcements">{announcements.map((a:any)=><div className="list" key={a.id}><div><b>{a.title}</b><small>{a.body}</small></div></div>)}</Card>}
-    </div>}
+    {view==='savings'&&<Card title="Savings and structured thrift"><p className="muted">Property Thrift is configured at ₦10,000 weekly for 50 weeks, while flexible participative savings can be funded as needed.</p><div className="planGrid">{plans.map((plan:any)=>{const e=enrollmentFor(plan.id);const target=Number(plan.target_amount_kobo||0);return <div className="plan" key={plan.id}><Status v={e?.status||'not enrolled'}/><h4>{plan.name}</h4><p className="muted">{plan.description}</p>{e&&<><b>{money(e.contributed_kobo)}</b>{target>0&&<><div className="progress"><span style={{width:`${pct(Number(e.contributed_kobo),target)}%`}}/></div><small className="muted">Next due: {e.next_due_date||'Flexible'}</small></>}</>}{!e?<button className="btn primary" disabled={!active} onClick={()=>void rpc('enroll_savings_plan_v4',{p_plan_id:plan.id})}>Enroll</button>:<button className="btn" disabled={!active} onClick={()=>{const a=Number(amount);if(!a||pin.length!==4){setMsg('Enter an amount and your 4-digit transaction PIN.');return;}void rpc('contribute_to_savings_plan_v4',{p_enrollment_id:e.id,p_amount_kobo:Math.round(a*100),p_pin:pin})}}>Contribute</button>}</div>})}</div><div className="two" style={{marginTop:18}}><label className="label">Contribution amount (₦)<input className="field" value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal"/></label><label className="label">Transaction PIN<input className="field" value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,'').slice(0,4))} inputMode="numeric" maxLength={4} type="password"/></label></div></Card>}
 
-    {view==='wallet'&&<div className="grid2">
-     <Card title="Available wallet"><div className="balance">{money(balances.wallet_available_kobo)}</div><p className="muted">Wallet funding does not ask for a PIN. Your transaction PIN is requested only when money leaves the available wallet.</p><label className="label">Amount to fund (₦)<input className="field" value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal"/></label><div className="actions"><button className="btn primary" disabled={busy} onClick={()=>void fundWallet()}>Fund with Paystack</button></div></Card>
-     <Card title="Your dedicated account">{snap?.virtual_account?.account_number?<><div className="balance" style={{fontSize:36}}>{snap.virtual_account.account_number}</div><p><b>{snap.virtual_account.bank_name}</b><br/>{snap.virtual_account.account_name}</p><p className="muted">Transfers to this account are reconciled after provider confirmation.</p></>:<Empty text="A dedicated virtual account has not been assigned yet. Paystack funding remains available."/>}</Card>
-    </div>}
+    {view==='shares'&&<div className="grid2"><Card title="Share capital"><div className="balance">{money(balances.share_capital_kobo)}</div><p className="muted">Share capital is your cooperative ownership stake.</p></Card><Card title="Buy additional shares"><label className="label">Amount (₦)<input className="field" value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal"/></label><label className="label">Transaction PIN<input className="field" value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,'').slice(0,4))} maxLength={4} type="password" inputMode="numeric"/></label><button className="btn primary" disabled={!active} onClick={()=>void rpc('allocate_wallet_funds',{p_destination:'SHARE_CAPITAL',p_amount_kobo:Math.round(Number(amount)*100),p_pin:pin})}>Allocate from wallet</button></Card></div>}
 
-    {view==='savings'&&<Card title="Savings and structured thrift">
-     <p className="muted">Property Thrift is configured at ₦10,000 weekly for 50 weeks, while flexible participative savings can be funded as needed.</p>
-     <div className="planGrid">{plans.map((plan:any)=>{const e=enrollmentFor(plan.id);const target=Number(plan.target_amount_kobo||0);return <div className="plan" key={plan.id}>
-      <Status v={e?.status||'not enrolled'}/><h4>{plan.name}</h4><p className="muted">{plan.description}</p>
-      {e&&<><b>{money(e.contributed_kobo)}</b>{target>0&&<><div className="progress"><span style={{width:`${pct(Number(e.contributed_kobo),target)}%`}}/></div><small className="muted">Next due: {e.next_due_date||'Flexible'}</small></>}</>}
-      {!e?<button className="btn primary" disabled={!active} onClick={()=>void rpc('enroll_savings_plan_v4',{p_plan_id:plan.id})}>Enroll</button>:<button className="btn" disabled={!active} onClick={()=>{const a=Number(amount);if(!a||pin.length!==4){setMsg('Enter an amount and your 4-digit transaction PIN.');return;}void rpc('contribute_to_savings_plan_v4',{p_enrollment_id:e.id,p_amount_kobo:Math.round(a*100),p_pin:pin})}}>Contribute</button>}
-     </div>})}</div>
-     <div className="two" style={{marginTop:18}}><label className="label">Contribution amount (₦)<input className="field" value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal"/></label><label className="label">Transaction PIN<input className="field" value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,'').slice(0,4))} inputMode="numeric" maxLength={4} type="password"/></label></div>
-    </Card>}
+    {view==='loans'&&<div className="stack"><section className="welcome"><div><p className="eyebrow" style={{color:'#a8e4c5'}}>Complete credit workspace</p><h2>Loan applications now include guarantors and repayments.</h2><p>Search active members as guarantors, set pledge amounts, see repayment schedules and repay from your wallet.</p></div><Link className="btn" href="/loans">Open loan workspace</Link></section><Card title="Your loans">{loans.map((l:any)=><div className="list" key={l.id}><div><b>{money(l.principal_kobo)} · {l.tenure_months} months</b><small>{l.created_at?new Date(l.created_at).toLocaleDateString():'—'}</small></div><Status v={l.status}/></div>)}{!loans.length&&<Empty/>}<div className="actions" style={{marginTop:12}}><Link className="btn primary" href="/loans">Apply / manage repayments</Link></div></Card><Card title="Guarantee requests">{guarantees.map((g:any)=><div className="list" key={g.id}><div><b>Pledge {money(g.pledged_amount_kobo)}</b><small>Borrower {g.loan?.borrower||'member'} · {money(g.loan?.principal_kobo)}</small></div><div className="actions"><Status v={g.status}/>{g.status==='PENDING'&&<><button className="btn danger" onClick={()=>void rpc('respond_to_guarantee',{p_request_id:g.id,p_accept:false})}>Decline</button><button className="btn primary" onClick={()=>void rpc('respond_to_guarantee',{p_request_id:g.id,p_accept:true})}>Accept</button></>}</div></div>)}{!guarantees.length&&<Empty/>}</Card></div>}
 
-    {view==='shares'&&<div className="grid2">
-     <Card title="Share capital"><div className="balance">{money(balances.share_capital_kobo)}</div><p className="muted">Share capital is your cooperative ownership stake.</p></Card>
-     <Card title="Buy additional shares"><label className="label">Amount (₦)<input className="field" value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal"/></label><label className="label">Transaction PIN<input className="field" value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,'').slice(0,4))} maxLength={4} type="password" inputMode="numeric"/></label><button className="btn primary" disabled={!active} onClick={()=>void rpc('allocate_wallet_funds',{p_destination:'SHARE_CAPITAL',p_amount_kobo:Math.round(Number(amount)*100),p_pin:pin})}>Allocate from wallet</button></Card>
-    </div>}
+    {view==='withdrawals'&&<div className="stack"><section className="welcome"><div><p className="eyebrow" style={{color:'#a8e4c5'}}>Verified bank payouts</p><h2>Verify your bank account before requesting a withdrawal.</h2><p>Paystack bank verification now stores the bank code and confirmed account name required for automated payout after two approvals.</p></div><Link className="btn" href="/withdrawals">Open withdrawal workspace</Link></section><Card title="Default beneficiary">{beneficiaries[0]?<><b>{beneficiaries[0].account_name}</b><p>{beneficiaries[0].bank_name} · {beneficiaries[0].account_number}</p>{beneficiaries[0].bank_code?<div className="alert success">Bank account is payout-ready.</div>:<div className="alert">This older beneficiary needs Paystack verification before payout.</div>}</>:<Empty text="No beneficiary has been saved yet."/>}<div className="actions"><Link className="btn primary" href="/withdrawals">Verify beneficiary / request withdrawal</Link></div></Card><Card title="Withdrawal history">{withdrawals.map((w:any)=><div className="list" key={w.id}><div><b>{money(w.amount_kobo)}</b><small>Fee {money(w.fee_kobo)} · {w.requested_at?new Date(w.requested_at).toLocaleDateString():'—'}</small></div><Status v={w.status}/></div>)}{!withdrawals.length&&<Empty/>}</Card></div>}
 
-    {view==='loans'&&<div className="stack">
-     <div className="grid2"><Card title="Apply for a loan"><p className="muted">Eligibility is enforced by the backend: savings history, security capacity and guarantor rules.</p><div className="two"><label className="label">Principal (₦)<input className="field" value={loanAmount} onChange={e=>setLoanAmount(e.target.value)} inputMode="decimal"/></label><label className="label">Tenure (months)<input className="field" type="number" min={1} max={120} value={tenure} onChange={e=>setTenure(e.target.value)}/></label></div><button className="btn primary" disabled={!active} onClick={()=>void rpc('create_loan_application',{p_principal_kobo:Math.round(Number(loanAmount)*100),p_tenure_months:Number(tenure),p_guarantors:[]})}>Submit loan application</button></Card><Card title="Loan security"><div className="factGrid"><div className="fact"><small>Savings</small><b>{money(balances.savings_kobo)}</b></div><div className="fact"><small>Shares</small><b>{money(balances.share_capital_kobo)}</b></div><div className="fact"><small>Pledged</small><b>{money(balances.pledged_security_kobo)}</b></div><div className="fact"><small>Security ratio</small><b>90%</b></div></div></Card></div>
-     <Card title="Your loans">{loans.map((l:any)=><div className="list" key={l.id}><div><b>{money(l.principal_kobo)} · {l.tenure_months} months</b><small>{new Date(l.created_at).toLocaleDateString()}</small></div><Status v={l.status}/></div>)}{!loans.length&&<Empty/>}</Card>
-     <Card title="Guarantee requests">{guarantees.map((g:any)=><div className="list" key={g.id}><div><b>Pledge {money(g.pledged_amount_kobo)}</b><small>Borrower {g.loan?.borrower||'member'} · {money(g.loan?.principal_kobo)}</small></div><div className="actions"><Status v={g.status}/>{g.status==='PENDING'&&<><button className="btn danger" onClick={()=>void rpc('respond_to_guarantee',{p_request_id:g.id,p_accept:false})}>Decline</button><button className="btn primary" onClick={()=>void rpc('respond_to_guarantee',{p_request_id:g.id,p_accept:true})}>Accept</button></>}</div></div>)}{!guarantees.length&&<Empty/>}</Card>
-    </div>}
+    {view==='transactions'&&<Card title="Financial transaction history"><div className="actions" style={{marginBottom:12}}><Link className="btn" href="/documents">Generate statement / receipts</Link></div><div className="tableWrap"><table className="table"><thead><tr><th>Date</th><th>Description</th><th>Reference</th><th>Status</th><th>Amount</th></tr></thead><tbody>{transactions.map((t:any)=><tr key={t.id}><td>{t.posted_at?new Date(t.posted_at).toLocaleDateString():'—'}</td><td>{t.description||t.source}</td><td>{t.reference}</td><td><Status v={t.status}/></td><td><b>{money(t.amount_kobo)}</b></td></tr>)}</tbody></table>{!transactions.length&&<Empty/>}</div></Card>}
 
-    {view==='withdrawals'&&<div className="stack">
-     <div className="grid2"><Card title="Saved beneficiary">{beneficiaries[0]?<><b>{beneficiaries[0].account_name}</b><p>{beneficiaries[0].bank_name} · {beneficiaries[0].account_number}</p></>:<Empty text="Save a beneficiary first."/>}</Card><Card title="Save bank beneficiary"><form className="formGrid" onSubmit={async e=>{e.preventDefault();const f=new FormData(e.currentTarget);await rpc('save_beneficiary_v4',{p_bank_name:f.get('bank'),p_bank_code:'',p_account_number:f.get('account'),p_account_name:f.get('name'),p_default:true})}}><input className="field" name="bank" placeholder="Bank name" required/><input className="field" name="account" placeholder="Account number" required inputMode="numeric"/><input className="field" name="name" placeholder="Account name" required/><button className="btn">Save beneficiary</button></form></Card></div>
-     <Card title="Request withdrawal">{beneficiaries[0]?<div className="two"><label className="label">Amount (₦)<input className="field" value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal"/></label><label className="label">Transaction PIN<input className="field" value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,'').slice(0,4))} maxLength={4} type="password" inputMode="numeric"/></label><button className="btn primary" disabled={!active} onClick={()=>void rpc('request_withdrawal',{p_amount_kobo:Math.round(Number(amount)*100),p_pin:pin,p_beneficiary:beneficiaries[0]})}>Submit withdrawal request</button></div>:<p className="muted">Save a beneficiary first.</p>}</Card>
-     <Card title="Withdrawal history">{withdrawals.map((w:any)=><div className="list" key={w.id}><div><b>{money(w.amount_kobo)}</b><small>Fee {money(w.fee_kobo)} · {new Date(w.requested_at).toLocaleDateString()}</small></div><Status v={w.status}/></div>)}{!withdrawals.length&&<Empty/>}</Card>
-    </div>}
+    {view==='support'&&<div className="grid2"><Card title="Contact cooperative support"><div className="formGrid"><input className="field" placeholder="Subject" value={ticket.subject} onChange={e=>setTicket({...ticket,subject:e.target.value})}/><select className="field" value={ticket.category} onChange={e=>setTicket({...ticket,category:e.target.value})}><option>GENERAL</option><option>PAYMENT</option><option>MEMBERSHIP</option><option>LOAN</option><option>WITHDRAWAL</option></select><textarea className="field" placeholder="Tell us what happened" value={ticket.message} onChange={e=>setTicket({...ticket,message:e.target.value})}/><button className="btn primary" onClick={()=>void rpc('create_support_ticket_v4',{p_subject:ticket.subject,p_category:ticket.category,p_message:ticket.message})}>Create support ticket</button></div>{supportTickets.map((t:any)=><div className="card" style={{boxShadow:'none',marginTop:12}} key={t.id}><div className="cardHeader"><div><b>{t.subject}</b><small className="muted" style={{display:'block'}}>{t.category} · priority {t.priority||'NORMAL'}</small></div><Status v={t.status}/></div>{t.admin_response&&<div className="alert success"><b>Cooperative response</b><br/>{t.admin_response}</div>}</div>)}</Card><Card title="Refer someone"><p className="muted">Your referral code: <b>{profile.referral_code||'—'}</b></p><form className="formGrid" onSubmit={async e=>{e.preventDefault();const f=new FormData(e.currentTarget);await rpc('create_referral_v4',{p_email:f.get('email'),p_phone:f.get('phone')})}}><input className="field" name="email" type="email" placeholder="Friend's email"/><input className="field" name="phone" placeholder="Friend's phone"/><button className="btn">Record referral</button></form>{referrals.map((r:any)=><div className="list" key={r.id}><div><b>{r.referred_email||r.referred_phone}</b></div><Status v={r.status}/></div>)}</Card></div>}
 
-    {view==='transactions'&&<Card title="Financial transaction history"><div className="tableWrap"><table className="table"><thead><tr><th>Date</th><th>Description</th><th>Reference</th><th>Status</th><th>Amount</th></tr></thead><tbody>{transactions.map((t:any)=><tr key={t.id}><td>{t.posted_at?new Date(t.posted_at).toLocaleDateString():'—'}</td><td>{t.description||t.source}</td><td>{t.reference}</td><td><Status v={t.status}/></td><td><b>{money(t.amount_kobo)}</b></td></tr>)}</tbody></table>{!transactions.length&&<Empty/>}</div></Card>}
-
-    {view==='support'&&<div className="grid2">
-     <Card title="Contact cooperative support"><div className="formGrid"><input className="field" placeholder="Subject" value={ticket.subject} onChange={e=>setTicket({...ticket,subject:e.target.value})}/><select className="field" value={ticket.category} onChange={e=>setTicket({...ticket,category:e.target.value})}><option>GENERAL</option><option>PAYMENT</option><option>MEMBERSHIP</option><option>LOAN</option><option>WITHDRAWAL</option></select><textarea className="field" placeholder="Tell us what happened" value={ticket.message} onChange={e=>setTicket({...ticket,message:e.target.value})}/><button className="btn primary" onClick={()=>void rpc('create_support_ticket_v4',{p_subject:ticket.subject,p_category:ticket.category,p_message:ticket.message})}>Create support ticket</button></div>{supportTickets.map((t:any)=><div className="list" key={t.id}><div><b>{t.subject}</b><small>{t.category}</small></div><Status v={t.status}/></div>)}</Card>
-     <Card title="Refer someone"><p className="muted">Your referral code: <b>{profile.referral_code||'—'}</b></p><form className="formGrid" onSubmit={async e=>{e.preventDefault();const f=new FormData(e.currentTarget);await rpc('create_referral_v4',{p_email:f.get('email'),p_phone:f.get('phone')})}}><input className="field" name="email" type="email" placeholder="Friend's email"/><input className="field" name="phone" placeholder="Friend's phone"/><button className="btn">Record referral</button></form>{referrals.map((r:any)=><div className="list" key={r.id}><div><b>{r.referred_email||r.referred_phone}</b></div><Status v={r.status}/></div>)}</Card>
-    </div>}
-
-    {view==='security'&&<div className="grid2">
-     <Card title="Transaction PIN"><p className="muted">Your 4-digit PIN protects member-initiated debits. Five failed attempts temporarily lock transactions.</p><label className="label">New 4-digit PIN<input className="field" value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,'').slice(0,4))} type="password" inputMode="numeric" maxLength={4}/></label><button className="btn primary" disabled={pin.length!==4} onClick={()=>void rpc('set_transaction_pin',{p_pin:pin})}>{snap?.pin?.pin_set?'Change PIN':'Set transaction PIN'}</button></Card>
-     <Card title="Notification preferences"><div className="factGrid"><div className="fact"><small>Email</small><b>{snap?.preferences?.email_enabled===false?'Off':'On'}</b></div><div className="fact"><small>SMS</small><b>{snap?.preferences?.sms_enabled?'On':'Off'}</b></div><div className="fact"><small>Push</small><b>{snap?.preferences?.push_enabled===false?'Off':'On'}</b></div><div className="fact"><small>PIN</small><b>{snap?.pin?.locked_until?'Temporarily locked':'Ready'}</b></div></div><div className="actions"><button className="btn" onClick={()=>void rpc('update_notification_preferences_v4',{p_email:true,p_sms:false,p_push:true})}>Email + push</button><button className="btn" onClick={()=>void rpc('update_notification_preferences_v4',{p_email:true,p_sms:true,p_push:true})}>Enable SMS too</button></div></Card>
-    </div>}
+    {view==='security'&&<div className="grid2"><Card title="Transaction PIN"><p className="muted">Your 4-digit PIN protects member-initiated debits. Five failed attempts temporarily lock transactions.</p><label className="label">New 4-digit PIN<input className="field" value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,'').slice(0,4))} type="password" inputMode="numeric" maxLength={4}/></label><button className="btn primary" disabled={pin.length!==4} onClick={()=>void rpc('set_transaction_pin',{p_pin:pin})}>{snap?.pin?.pin_set?'Change PIN':'Set transaction PIN'}</button></Card><Card title="Notification preferences"><div className="factGrid"><div className="fact"><small>Email</small><b>{snap?.preferences?.email_enabled===false?'Off':'On'}</b></div><div className="fact"><small>SMS</small><b>{snap?.preferences?.sms_enabled?'On':'Off'}</b></div><div className="fact"><small>Push</small><b>{snap?.preferences?.push_enabled===false?'Off':'On'}</b></div><div className="fact"><small>PIN</small><b>{snap?.pin?.locked_until?'Temporarily locked':'Ready'}</b></div></div><div className="actions"><button className="btn" onClick={()=>void rpc('update_notification_preferences_v4',{p_email:true,p_sms:false,p_push:true})}>Email + push</button><button className="btn" onClick={()=>void rpc('update_notification_preferences_v4',{p_email:true,p_sms:true,p_push:true})}>Enable SMS too</button></div></Card></div>}
    </main>
   </div>
- </div>;
+ </div>
 }
