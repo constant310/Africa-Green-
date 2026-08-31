@@ -15,6 +15,7 @@ jobs:
         with:
           node-version: 24
       - run: npm install
+      - run: npm run systemcheck
       - run: npm run typecheck
       - run: npm run build
       - name: Verify required routes exist
@@ -31,13 +32,16 @@ jobs:
           test -f app/notifications/page.tsx
           test -f app/documents/page.tsx
           test -f app/admin/page.tsx
+          test -f app/admin/create-member/page.tsx
           test -f app/admin/withdrawals/page.tsx
           test -f app/admin/support/page.tsx
           test -f app/admin/readiness/page.tsx
           test -f app/admin/reports/page.tsx
           test -f app/admin/audit-export/page.tsx
+          test -f app/admin/tools/page.tsx
           test -f app/auth/callback/page.tsx
           test -f app/api/health/route.ts
+          test -f app/api/admin/create-member/route.ts
           test -f app/api/admin/audit-export/route.ts
           test -f app/api/paystack/registration/route.ts
           test -f app/api/paystack/wallet/route.ts
@@ -48,3 +52,4 @@ jobs:
           test -f app/api/paystack/withdrawal-transfer/route.ts
           test -f app/api/paystack/webhook/route.ts
           test -f app/api/kyc/dojah/route.ts
+          test -f supabase/migrations/20260831210000_v4_full_system_hardening.sql
