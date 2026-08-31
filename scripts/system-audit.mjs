@@ -31,6 +31,7 @@ function walk(dir){
   if(entry.isDirectory()){walk(full);continue;}
   if(!textExt.has(path.extname(entry.name)))continue;
   const rel=path.relative(root,full);
+  if(rel==='scripts/system-audit.mjs')continue;
   const text=fs.readFileSync(full,'utf8');
   for(const p of secretPatterns){if(p.re.test(text))violations.push(`${p.name}: ${rel}`);p.re.lastIndex=0;}
   if(/NEXT_PUBLIC_(?:V4_)?(?:SUPABASE_SERVICE_ROLE_KEY|PAYSTACK_SECRET_KEY|RESEND_API_KEY)/.test(text))violations.push(`Server secret exposed through NEXT_PUBLIC_: ${rel}`);
