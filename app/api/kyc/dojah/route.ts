@@ -1,10 +1,9 @@
 import {NextRequest,NextResponse} from 'next/server';
 
 const supabaseUrl=process.env.NEXT_PUBLIC_V4_SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL||'https://ynlmhpwytpegleafdpwb.supabase.co';
-const publishable=process.env.NEXT_PUBLIC_V4_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||'';
+const publishable=process.env.NEXT_PUBLIC_V4_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||'sb_publishable_B6dHJGvHPWrJfO-jsEHdog_cSaaL0VP';
 
 async function authenticated(token:string){
- if(!publishable)return false;
  const r=await fetch(`${supabaseUrl}/auth/v1/user`,{headers:{apikey:publishable,Authorization:`Bearer ${token}`},cache:'no-store'});
  return r.ok;
 }
@@ -49,7 +48,8 @@ export async function POST(req:NextRequest){
     gender:entity.gender||null,
    }
   },{headers:{'Cache-Control':'no-store'}});
- }catch{
+ }catch(e){
+  console.error('dojah_kyc_error',e);
   return NextResponse.json({error:'Unable to complete identity verification.'},{status:500});
  }
 }
