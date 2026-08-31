@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function AdminTools(){
  const tools=[
-  {href:'/admin/create-member',title:'Approve signed-up user',body:'Record a pre-approval only for someone who already created an account. Registration and final membership approval are still required.'},
+  {href:'/admin/create-member',title:'Membership activation',body:'Pre-approve an existing account through the normal workflow, or use the audited Super Admin direct-activation exception when authorized.'},
   {href:'/admin/reports',title:'Financial reports',body:'Live read-only totals for wallet liabilities, savings, shares, loans, security, fees and withdrawals, with CSV export.'},
   {href:'/admin/audit-export',title:'Export audit log',body:'Download the accountable cooperative audit trail as CSV for governance and reconciliation.'},
   {href:'/admin/readiness',title:'Production readiness',body:'Check Supabase, Paystack, Resend, Dojah KYC and other launch configuration without exposing secret values.'},
