@@ -53,3 +53,4 @@ jobs:
           test -f app/api/paystack/webhook/route.ts
           test -f app/api/kyc/dojah/route.ts
           test -f supabase/migrations/20260831210000_v4_full_system_hardening.sql
+          test -f supabase/migrations/20260831211000_v4_active_member_consistency_backfill.sql
