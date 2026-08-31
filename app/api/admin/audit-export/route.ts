@@ -1,7 +1,7 @@
 import {NextRequest,NextResponse} from 'next/server';
 
 const supabaseUrl=process.env.NEXT_PUBLIC_V4_SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL||'https://ynlmhpwytpegleafdpwb.supabase.co';
-const publishable=process.env.NEXT_PUBLIC_V4_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||'';
+const publishable=process.env.NEXT_PUBLIC_V4_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||'sb_publishable_B6dHJGvHPWrJfO-jsEHdog_cSaaL0VP';
 
 const csv=(v:unknown)=>`"${String(v??'').replaceAll('"','""')}"`;
 
@@ -9,7 +9,6 @@ export async function GET(req:NextRequest){
  try{
   const token=req.headers.get('authorization')?.replace(/^Bearer\s+/i,'');
   if(!token)return NextResponse.json({error:'Unauthorized'},{status:401});
-  if(!publishable)return NextResponse.json({error:'Supabase public configuration is missing.'},{status:503});
   const query=req.nextUrl.searchParams.get('q')||null;
   const r=await fetch(`${supabaseUrl}/rest/v1/rpc/admin_audit_log_v4`,{
    method:'POST',
@@ -37,7 +36,8 @@ export async function GET(req:NextRequest){
    ].map(csv).join(','));
   }
   return new NextResponse(lines.join('\n'),{status:200,headers:{'Content-Type':'text/csv; charset=utf-8','Content-Disposition':`attachment; filename="cooperative-audit-${new Date().toISOString().slice(0,10)}.csv"`,'Cache-Control':'no-store'}});
- }catch{
+ }catch(e){
+  console.error('audit_export_error',e);
   return NextResponse.json({error:'Unable to export audit log.'},{status:500});
  }
 }
