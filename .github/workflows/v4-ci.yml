@@ -24,6 +24,8 @@ jobs:
           test -f app/page.tsx
           test -f app/login/page.tsx
           test -f app/register/page.tsx
+          test -f app/forgot-password/page.tsx
+          test -f app/reset-password/page.tsx
           test -f app/onboarding/page.tsx
           test -f app/portal/page.tsx
           test -f app/loans/page.tsx
