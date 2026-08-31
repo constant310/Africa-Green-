@@ -15,7 +15,9 @@ export default function ForgotPassword(){
  async function submit(e:FormEvent){
   e.preventDefault();
   setBusy(true);setMsg('');
-  const {error}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:`${appUrl()}/reset-password`});
+  const callback=new URL('/auth/callback',appUrl());
+  callback.searchParams.set('next','/reset-password');
+  const {error}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:callback.toString()});
   setBusy(false);
   if(error){setMsg('We could not start password recovery. Please try again shortly.');return;}
   setSent(true);
