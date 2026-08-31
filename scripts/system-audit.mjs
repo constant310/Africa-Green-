@@ -11,7 +11,8 @@ const required=[
  'app/api/paystack/registration/route.ts','app/api/paystack/wallet/route.ts','app/api/paystack/verify-wallet/route.ts',
  'app/api/paystack/reconcile-wallet/route.ts','app/api/paystack/banks/route.ts','app/api/paystack/resolve-account/route.ts',
  'app/api/paystack/withdrawal-transfer/route.ts','app/api/paystack/webhook/route.ts','app/api/kyc/dojah/route.ts',
- 'supabase/migrations/20260831210000_v4_full_system_hardening.sql'
+ 'supabase/migrations/20260831210000_v4_full_system_hardening.sql',
+ 'supabase/migrations/20260831211000_v4_active_member_consistency_backfill.sql'
 ];
 
 const missing=required.filter(file=>!fs.existsSync(path.join(root,file)));
@@ -40,9 +41,13 @@ function walk(dir){
 walk(root);
 if(violations.length)throw new Error(`Release security audit failed:\n${[...new Set(violations)].join('\n')}`);
 
-const migration=fs.readFileSync(path.join(root,'supabase/migrations/20260831210000_v4_full_system_hardening.sql'),'utf8');
+const hardening=fs.readFileSync(path.join(root,'supabase/migrations/20260831210000_v4_full_system_hardening.sql'),'utf8');
 for(const marker of ['SUPER_ADMIN_MEMBER_ACTIVATED_DIRECTLY','DIRECT_ACTIVATION_REASON_REQUIRED','idx_journal_lines_journal_id']){
- if(!migration.includes(marker))throw new Error(`Hardening migration is missing ${marker}`);
+ if(!hardening.includes(marker))throw new Error(`Hardening migration is missing ${marker}`);
+}
+const backfill=fs.readFileSync(path.join(root,'supabase/migrations/20260831211000_v4_active_member_consistency_backfill.sql'),'utf8');
+for(const marker of ['SYSTEM_ACTIVE_MEMBER_CONSISTENCY_BACKFILL','ensure_member_accounts','member_number']){
+ if(!backfill.includes(marker))throw new Error(`Active member consistency migration is missing ${marker}`);
 }
 
-console.log(`V4 system audit passed: ${required.length} required files, secret-surface checks, and governance hardening verified.`);
+console.log(`V4 system audit passed: ${required.length} required files, secret-surface checks, governance hardening, and active-member consistency verified.`);
