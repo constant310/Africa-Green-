@@ -25,10 +25,14 @@ jobs:
           test -f app/register/page.tsx
           test -f app/onboarding/page.tsx
           test -f app/portal/page.tsx
+          test -f app/loans/page.tsx
+          test -f app/withdrawals/page.tsx
           test -f app/activity/page.tsx
           test -f app/notifications/page.tsx
           test -f app/documents/page.tsx
           test -f app/admin/page.tsx
+          test -f app/admin/withdrawals/page.tsx
+          test -f app/admin/support/page.tsx
           test -f app/admin/readiness/page.tsx
           test -f app/admin/reports/page.tsx
           test -f app/admin/audit-export/page.tsx
@@ -39,5 +43,8 @@ jobs:
           test -f app/api/paystack/wallet/route.ts
           test -f app/api/paystack/verify-wallet/route.ts
           test -f app/api/paystack/reconcile-wallet/route.ts
+          test -f app/api/paystack/banks/route.ts
+          test -f app/api/paystack/resolve-account/route.ts
+          test -f app/api/paystack/withdrawal-transfer/route.ts
           test -f app/api/paystack/webhook/route.ts
           test -f app/api/kyc/dojah/route.ts
