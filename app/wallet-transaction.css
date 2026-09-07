@@ -19,7 +19,7 @@
 .walletGuardActions{display:grid;grid-template-columns:1fr 1.35fr;gap:10px;margin-top:16px}
 .walletGuardFull{width:100%;margin-top:14px}
 /* The original inline transaction-PIN fields remain mounted for React state/RPC compatibility, but the member enters the PIN only in the confirmation sheet. */
-label:has(>input[type="password"][maxlength="4"]){display:none!important}
+label:not(.walletGuardPinLabel):has(>input[type="password"][maxlength="4"]){display:none!important}
 @keyframes walletGuardIn{from{transform:translateY(24px);opacity:.4}to{transform:translateY(0);opacity:1}}
 @media(min-width:700px){.walletGuardOverlay{align-items:center}.walletGuardSheet{border-radius:24px;padding:18px 24px 24px}}
 @media(prefers-reduced-motion:reduce){.walletGuardSheet{animation:none}}
