@@ -37,6 +37,7 @@ export function friendlyError(message?: string) {
     DUPLICATE_GUARANTOR: 'Select two different guarantors. The same member cannot be added twice.',
     GUARANTOR_SECURITY_INSUFFICIENT: 'The selected guarantor does not have enough eligible security for that pledge.',
     GUARANTOR_SECURITY_NO_LONGER_AVAILABLE: 'The guarantor no longer has enough available security for this pledge.',
+    GUARANTOR_NO_LONGER_ACTIVE: 'A guarantor is no longer an active cooperative member. Choose another eligible guarantor before final loan approval.',
     GUARANTEE_REQUEST_NOT_AVAILABLE: 'This guarantee request is no longer available for action.',
     GUARANTOR_ACCEPTANCE_INCOMPLETE: 'All requested guarantors must accept before the loan can receive final approval.',
     BORROWER_SECURITY_NO_LONGER_AVAILABLE: 'Your eligible savings and shares no longer provide enough security for this loan.',
