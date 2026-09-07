@@ -1,7 +1,7 @@
 create or replace function public.approve_loan(
   p_loan_id uuid,
   p_decision public.approval_decision,
-  p_comments text
+  p_comments text default null
 )
 returns jsonb
 language plpgsql
