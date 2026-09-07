@@ -1,0 +1,25 @@
+/* OPay-style wallet transaction confirmation */
+.walletGuardOverlay{position:fixed;inset:0;z-index:10000;background:rgba(8,19,14,.58);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;padding:14px}
+.walletGuardSheet{width:min(520px,100%);background:#fff;border-radius:24px 24px 16px 16px;padding:14px 20px 22px;box-shadow:0 28px 80px rgba(0,0,0,.28);animation:walletGuardIn .2s ease-out;color:var(--ink,#17211d)}
+.walletGuardHandle{width:46px;height:5px;border-radius:99px;background:#d8dedb;margin:0 auto 18px}
+.walletGuardSheet h2{margin:0;text-align:center;font-size:1.35rem}
+.walletGuardIcon{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;margin:0 auto 10px;background:#e7f7ef;color:#08734b;font-weight:900;font-size:1.25rem}
+.walletGuardIcon.error{background:#fff1f1;color:#ba3030}
+.walletGuardAmount{text-align:center;font-weight:900;font-size:2rem;letter-spacing:-.03em;margin:10px 0 18px}
+.walletGuardSummary{border:1px solid #e5e9e7;border-radius:16px;overflow:hidden;background:#fbfcfb}
+.walletGuardSummary>div{display:flex;justify-content:space-between;gap:20px;padding:12px 14px;border-bottom:1px solid #e5e9e7}
+.walletGuardSummary>div:last-child{border-bottom:0}
+.walletGuardSummary span{color:#66736d;font-size:.86rem}
+.walletGuardSummary b{text-align:right;font-size:.9rem;max-width:65%}
+.walletGuardMuted{color:#66736d;font-size:.9rem;line-height:1.55;text-align:center;margin:14px 0}
+.walletGuardPinLabel{display:block;font-size:.88rem;font-weight:800;margin-top:10px}
+.walletGuardPin{width:100%;margin-top:7px;border:1px solid #cad4cf;border-radius:14px;padding:14px 16px;font-size:1.35rem;text-align:center;letter-spacing:.75em;font-weight:900;outline:none;background:#fff;box-sizing:border-box}
+.walletGuardPin:focus{border-color:#08734b;box-shadow:0 0 0 3px rgba(8,115,75,.12)}
+.walletGuardError{margin-top:8px;padding:10px 12px;border-radius:12px;background:#fff1f1;color:#9d2020;font-size:.86rem;font-weight:700}
+.walletGuardActions{display:grid;grid-template-columns:1fr 1.35fr;gap:10px;margin-top:16px}
+.walletGuardFull{width:100%;margin-top:14px}
+/* The original inline transaction-PIN fields remain mounted for React state/RPC compatibility, but the member enters the PIN only in the confirmation sheet. */
+label:not(.walletGuardPinLabel):has(>input[type="password"][maxlength="4"]){display:none!important}
+@keyframes walletGuardIn{from{transform:translateY(24px);opacity:.4}to{transform:translateY(0);opacity:1}}
+@media(min-width:700px){.walletGuardOverlay{align-items:center}.walletGuardSheet{border-radius:24px;padding:18px 24px 24px}}
+@media(prefers-reduced-motion:reduce){.walletGuardSheet{animation:none}}
